@@ -59,7 +59,7 @@ pipeline:
       tls: on
       tls.verify: ${FLB_TLS_VERIFY}
       tls.verify_hostname: ${FLB_TLS_VERIFY}
-      tls.ca_file: /data/hive.crt
+      tls.ca_file: ${FLB_CA_FILE}
       tls.vhost: ${TPOT_HIVE_IP}
       retry_limit: no_limits
       storage.total_limit_size: ${FLB_STORAGE_LIMIT}

@@ -105,7 +105,7 @@ class ConfigTest(unittest.TestCase):
             "name": "http", "match": "*", "log_level": "warn", "host": "${TPOT_HIVE_IP}", "port": "${TPOT_HIVE_PORT}", "uri": "/",
             "format": "json", "json_date_key": "@timestamp", "json_date_format": "iso8601", "compress": "gzip",
             "tls": "on", "tls.verify": "${FLB_TLS_VERIFY}", "tls.verify_hostname": "${FLB_TLS_VERIFY}",
-            "tls.ca_file": "/data/hive.crt", "tls.vhost": "${TPOT_HIVE_IP}",
+            "tls.ca_file": "${FLB_CA_FILE}", "tls.vhost": "${TPOT_HIVE_IP}",
             "retry_limit": "no_limits", "storage.total_limit_size": "${FLB_STORAGE_LIMIT}", "workers": "1"})
 
     def test_image_pins(self):
@@ -122,6 +122,8 @@ class ConfigTest(unittest.TestCase):
         # gnupg checks the key in the first stage only
         final = dockerfile.rsplit("\nFROM ", 1)[1]
         self.assertNotIn("gnupg", final)
+        # the entrypoint decides the trust file and the TLS verdict with openssl, named, not left to curl's deps
+        self.assertIn("apt-get install -y --no-install-recommends ca-certificates curl openssl &&", final)
         with open(IMAGE_DIR / "docker-compose.yml", encoding="utf-8") as handle:
             service = yaml.safe_load(handle)["services"]["fluentbit"]
         version = (ROOT / "version").read_text(encoding="utf-8").strip()
@@ -162,6 +164,19 @@ class ConfigTest(unittest.TestCase):
         # the login goes to curl from a file, never in its argv
         self.assertIn("-H @", text)
         self.assertIn('"${FLB_PROBE_DIR:-/tmp}"', text)
+        # the trust file of Fluent Bit and the probe (ProbeTest runs the rule and the verdict)
+        self.assertIn('"${TPOT_HIVE_CRT:-/data/hive.crt}"', text)
+        self.assertIn('"${FLB_SYSTEM_CA:-/etc/ssl/certs/ca-certificates.crt}"', text)
+        self.assertRegex(text, r"(?m)^export .*\bFLB_CA_FILE\b")
+        self.assertIn("timeout 10 openssl s_client", text)
+        # Fluent Bit takes no partial chain: neither may the rule or the verdict
+        self.assertNotIn("partial_chain", text)
+        for message in ("The HIVE's certificate is not trusted (${myREASON}); on the HIVE, tpot sensors cert "
+                        "--distribute copies its certificate here (after --renew if it expired).",
+                        "The HIVE's certificate is not trusted (${myREASON}); with a certificate of your own CA, "
+                        "append the root of that CA to nginx.crt on the HIVE, then run tpot sensors cert "
+                        "--distribute there."):
+            self.assertIn(message, text)
 
 
 @unittest.skipUnless(shutil.which("bash"), "needs bash")
@@ -170,7 +185,12 @@ class ProbeTest(unittest.TestCase):
     SENSOR's login and, only after a 401 with X-TPot-Ingest login, with it. It runs with the bash of PATH
     (it stays bash 3.2 compatible) and stubs: curl answers stage 1 (no -H) from answer-1 and stage 2 from
     answer-2 (one line per call, "CODE [MARK]", the last line stays), sleep records its seconds and sends
-    TERM to the entrypoint at its `sleeps`-th call, fluent-bit records the files of FLB_PROBE_DIR."""
+    TERM to the entrypoint at its `sleeps`-th call, fluent-bit records the files of FLB_PROBE_DIR and its
+    trust file. Before the stages each round picks the trust file (hive.crt pinned when one certificate of
+    it verifies itself, else the system store) and, with LS_SSL_VERIFICATION=full, asks openssl s_client
+    for the TLS verdict: openssl verify passes a PEM block that says self (with the options of the rule
+    only), s_client prints the line of s_client to stderr and fails with it (no file: verified), timeout
+    runs the rest."""
 
     AUTH = base64.b64encode(b"sensor-x:secret").decode()
     OLD = "The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here."
@@ -179,6 +199,12 @@ class ProbeTest(unittest.TestCase):
              "shows its access; logs wait here.")
     PIPELINE = "The HIVE's Logstash pipeline is not ready for this SENSOR format; logs wait here."
     BUSY = re.compile(r"The HIVE is busy \(HTTP 429\), next probe in (\d+) s\.")
+    PINNED = ("The HIVE's certificate is not trusted ({}); on the HIVE, tpot sensors cert --distribute copies its "
+              "certificate here (after --renew if it expired).")
+    SYSTEM = ("The HIVE's certificate is not trusted ({}); with a certificate of your own CA, append the root of "
+              "that CA to nginx.crt on the HIVE, then run tpot sensors cert --distribute there.")
+    SELF = "-----BEGIN CERTIFICATE-----\nself\n-----END CERTIFICATE-----\n"
+    LEAF = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
 
     CURL = """#!{python}
 import json, os, sys
@@ -230,7 +256,46 @@ with open(os.path.join(stub, "sleeps"), encoding="utf-8") as handle:
 import json, os, sys
 stub, probe = {stub!r}, {probe!r}
 with open(os.path.join(stub, "fluent-bit.json"), "w", encoding="utf-8") as handle:
-    json.dump({{"argv": sys.argv[1:], "files": sorted(os.listdir(probe))}}, handle)
+    json.dump({{"argv": sys.argv[1:], "files": sorted(os.listdir(probe)), "ca_file": os.environ.get("FLB_CA_FILE")}},
+              handle)
+"""
+
+    OPENSSL = """#!{python}
+import json, os, sys
+stub = {stub!r}
+args = sys.argv[1:]
+call = {{"argv": args}}
+if args[:1] == ["verify"]:
+    try:
+        with open(args[-1], encoding="utf-8") as handle:
+            call["text"] = handle.read()
+    except OSError as error:
+        call["text"] = str(error)
+with open(os.path.join(stub, "openssl.jsonl"), "a", encoding="utf-8") as handle:
+    handle.write(json.dumps(call) + "\\n")
+if args[:1] == ["verify"]:
+    rule = {{"-no_check_time", "-no-CApath", "-no-CAstore"}} <= set(args) and "-partial_chain" not in args
+    anchor = "-CAfile" in args and args[args.index("-CAfile") + 1] == args[-1]
+    sys.exit(0 if rule and anchor and "self" in call["text"] else 2)
+if args[:1] == ["s_client"]:
+    line = ""
+    if os.path.exists(os.path.join(stub, "s_client")):
+        with open(os.path.join(stub, "s_client"), encoding="utf-8") as handle:
+            line = handle.read().strip()
+    if not line:
+        print("Verify return code: 0 (ok)")
+        sys.exit(0)
+    print(line, file=sys.stderr)
+    sys.exit(1)
+sys.exit(3)
+"""
+
+    TIMEOUT = """#!{python}
+import json, os, sys
+stub = {stub!r}
+with open(os.path.join(stub, "timeout.jsonl"), "a", encoding="utf-8") as handle:
+    handle.write(json.dumps({{"argv": sys.argv[1:]}}) + "\\n")
+os.execvp(sys.argv[2], sys.argv[2:])
 """
 
     def setUp(self):
@@ -240,12 +305,19 @@ with open(os.path.join(stub, "fluent-bit.json"), "w", encoding="utf-8") as handl
         self.stub = self.folder / "stub"
         self.probe = self.folder / "probe"
         self.bin = self.folder / "bin"
+        self.hive_crt = self.folder / "hive.crt"
+        self.system_ca = self.folder / "ca-certificates.crt"
         for path in (self.stub, self.probe, self.bin):
             path.mkdir()
         values = {"python": sys.executable, "stub": str(self.stub), "probe": str(self.probe)}
-        for name, text in (("curl", self.CURL), ("sleep", self.SLEEP), ("fluent-bit", self.FLUENT_BIT)):
+        for name, text in (("curl", self.CURL), ("sleep", self.SLEEP), ("fluent-bit", self.FLUENT_BIT),
+                           ("openssl", self.OPENSSL), ("timeout", self.TIMEOUT)):
             (self.bin / name).write_text(text.format(**values), encoding="utf-8")
             (self.bin / name).chmod(0o755)
+
+    def records(self, name):
+        path = self.stub / name
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
 
     def run_probe(self, stage1, stage2=("500",), sleeps=1, **env):
         """The entrypoint with these answers; (result, curl calls, sleeps, what fluent-bit saw or None)."""
@@ -254,18 +326,36 @@ with open(os.path.join(stub, "fluent-bit.json"), "w", encoding="utf-8") as handl
         (self.stub / "sleeps").write_text(str(sleeps), encoding="utf-8")
         environ = {"PATH": f"{self.bin}{os.pathsep}{os.environ.get('PATH', '')}",
                    "TPOT_HIVE_IP": "192.0.2.10", "TPOT_HIVE_USER": self.AUTH, "FLB_PROBE_DIR": str(self.probe),
-                   "TPOT_HIVE_CRT": str(self.folder / "hive.crt"),
-                   "FLB_SYSTEM_CA": str(self.folder / "ca-certificates.crt"), "LS_SSL_VERIFICATION": "none", **env}
+                   "TPOT_HIVE_CRT": str(self.hive_crt),
+                   "FLB_SYSTEM_CA": str(self.system_ca), "LS_SSL_VERIFICATION": "none", **env}
         result = subprocess.run(["bash", str(DIST / "entrypoint.sh")], env=environ, capture_output=True,
                                 text=True, timeout=60, check=False)
-
-        def lines(name):
-            path = self.stub / name
-            return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
-
         started = self.stub / "fluent-bit.json"
-        return (result, lines("curl.jsonl"), lines("sleep.jsonl"),
+        return (result, self.records("curl.jsonl"), self.records("sleep.jsonl"),
                 json.loads(started.read_text(encoding="utf-8")) if started.exists() else None)
+
+    def verify_tls(self, stage1, stage2=("500",), crt=None, s_client=None, **env):
+        """run_probe with LS_SSL_VERIFICATION=full, hive.crt of these PEM blocks (None: no file) and the line
+        of s_client (None: verified); also the s_client calls (the argv after timeout and openssl)."""
+        for name in ("curl.jsonl", "sleep.jsonl", "fluent-bit.json", "openssl.jsonl", "timeout.jsonl", "s_client"):
+            (self.stub / name).unlink(missing_ok=True)
+        self.hive_crt.unlink(missing_ok=True)
+        if crt is not None:
+            self.hive_crt.write_text(crt, encoding="utf-8")
+        if s_client is not None:
+            (self.stub / "s_client").write_text(s_client + "\n", encoding="utf-8")
+        result, calls, sleeps, started = self.run_probe(stage1, stage2, LS_SSL_VERIFICATION="full", **env)
+        verdicts = [call["argv"][2:] for call in self.records("timeout.jsonl")]
+        self.assertEqual([call["argv"][:3] for call in self.records("timeout.jsonl")],
+                         [["10", "openssl", "s_client"]] * len(verdicts))
+        self.assertEqual(len(verdicts), len([call for call in self.records("openssl.jsonl")
+                                             if call["argv"][:1] == ["s_client"]]))
+        return result, calls, sleeps, started, verdicts
+
+    @staticmethod
+    def option(argv, name):
+        """The value after option NAME in an argv (None without it)."""
+        return argv[argv.index(name) + 1] if name in argv else None
 
     def test_a_hive_of_this_release_starts_fluent_bit(self):
         result, calls, sleeps, started = self.run_probe(["401 login"], ["204 2"])
@@ -346,6 +436,100 @@ with open(os.path.join(stub, "fluent-bit.json"), "w", encoding="utf-8") as handl
         self.assertEqual(oct(calls[1]["mode"]), oct(0o600))
         self.assertNotIn("tpot-probe.auth", started["files"])
         self.assertFalse((self.probe / "tpot-probe.auth").exists())
+
+    def test_a_self_signed_certificate_is_pinned(self):
+        # the HIVE's own certificate, or a leaf with the root of its CA appended: one block verifies itself
+        for crt, address, check in ((self.SELF, "192.0.2.10", ["-verify_ip", "192.0.2.10"]),
+                                    (self.LEAF + self.SELF, "hive.example",
+                                     ["-servername", "hive.example", "-verify_hostname", "hive.example"])):
+            with self.subTest(blocks=crt.count("BEGIN"), address=address):
+                result, calls, _sleeps, started, verdicts = self.verify_tls(["401 login"], ["204 2"], crt=crt,
+                                                                            TPOT_HIVE_IP=address)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual([self.option(call["argv"], "--cacert") for call in calls], [str(self.hive_crt)] * 2)
+                self.assertEqual(len(verdicts), 1)
+                verdict = verdicts[0]
+                self.assertEqual(self.option(verdict, "-CAfile"), str(self.hive_crt))
+                self.assertEqual(self.option(verdict, "-connect"), f"{address}:64294")
+                for flag in ("-no-CApath", "-no-CAstore", "-verify_return_error"):
+                    self.assertIn(flag, verdict)
+                self.assertEqual([arg for arg in verdict if arg in ("-verify_ip", "-servername", "-verify_hostname")],
+                                 check[::2])
+                for flag, value in zip(check[::2], check[1::2]):
+                    self.assertEqual(self.option(verdict, flag), value)
+                self.assertEqual(started["ca_file"], str(self.hive_crt))
+                # the rule asks openssl verify for each block alone, the split files are gone again
+                checked = [call for call in self.records("openssl.jsonl") if call["argv"][:1] == ["verify"]]
+                self.assertTrue(checked)
+                for call in checked:
+                    self.assertEqual(call["text"].count("-----BEGIN CERTIFICATE-----"), 1, call)
+                    self.assertNotEqual(call["argv"][-1], str(self.hive_crt))
+                self.assertEqual(started["files"], [])
+
+    def test_a_ca_certificate_uses_the_system_store(self):
+        # a leaf issued by a CA (and its intermediate): no block verifies itself, Fluent Bit takes the system store
+        result, calls, _sleeps, started, verdicts = self.verify_tls(["401 login"], ["204 2"],
+                                                                    crt=self.LEAF + self.LEAF)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([self.option(call["argv"], "--cacert") for call in calls], [str(self.system_ca)] * 2)
+        self.assertEqual([self.option(verdict, "-CAfile") for verdict in verdicts], [str(self.system_ca)])
+        self.assertEqual(started["ca_file"], str(self.system_ca))
+        self.assertEqual(started["files"], [])
+
+    def test_without_hive_crt_the_system_store(self):
+        result, calls, _sleeps, started, verdicts = self.verify_tls(["401 login"], ["204 2"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([self.option(call["argv"], "--cacert") for call in calls], [str(self.system_ca)] * 2)
+        self.assertEqual([self.option(verdict, "-CAfile") for verdict in verdicts], [str(self.system_ca)])
+        self.assertEqual(started["ca_file"], str(self.system_ca))
+        self.assertEqual([call for call in self.records("openssl.jsonl") if call["argv"][:1] == ["verify"]], [])
+
+    def test_an_expired_self_signed_certificate_stays_pinned(self):
+        # openssl verify of the rule passes only with -no_check_time (the stub checks it): an expired
+        # certificate of the HIVE stays its anchor and the verdict names the reason
+        result, calls, sleeps, started, verdicts = self.verify_tls(
+            ["401 login"], ["204 2"], crt=self.SELF, s_client="verify error:num=10:certificate has expired")
+        self.assertEqual(result.returncode, 143, result.stderr)
+        self.assertIn(self.PINNED.format("certificate has expired"), result.stderr)
+        self.assertEqual([self.option(verdict, "-CAfile") for verdict in verdicts], [str(self.hive_crt)])
+        self.assertEqual(calls, [])
+        self.assertEqual([sleep["seconds"] for sleep in sleeps], ["300"])
+        self.assertIn("tpot-waiting", sleeps[0]["files"])
+        self.assertIsNone(started)
+
+    def test_a_ca_certificate_that_fails_names_the_root(self):
+        result, calls, sleeps, started, verdicts = self.verify_tls(
+            ["401 login"], ["204 2"], crt=self.LEAF,
+            s_client="verify error:num=20:unable to get local issuer certificate")
+        self.assertEqual(result.returncode, 143, result.stderr)
+        self.assertIn(self.SYSTEM.format("unable to get local issuer certificate"), result.stderr)
+        self.assertNotIn("(after --renew if it expired)", result.stderr)
+        self.assertEqual([self.option(verdict, "-CAfile") for verdict in verdicts], [str(self.system_ca)])
+        self.assertEqual(calls, [])
+        self.assertEqual([sleep["seconds"] for sleep in sleeps], ["300"])
+        self.assertIsNone(started)
+
+    def test_s_client_without_a_verdict_goes_on_to_curl(self):
+        # no verify error (no answer, a refused connection, the timeout): curl names what it finds
+        result, calls, _sleeps, started, verdicts = self.verify_tls(["401 login"], ["204 2"], crt=self.SELF,
+                                                                    s_client="connect:errno=111")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(verdicts), 1)
+        self.assertEqual(len(calls), 2)
+        self.assertIn(self.START, result.stdout)
+        self.assertNotIn("is not trusted", result.stderr)
+        self.assertIsNotNone(started)
+
+    def test_verification_none_asks_no_openssl(self):
+        self.hive_crt.write_text(self.SELF, encoding="utf-8")
+        result, calls, _sleeps, started = self.run_probe(["401 login"], ["204 2"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([call["argv"].count("-k") for call in calls], [1, 1])
+        for call in calls:
+            self.assertNotIn("--cacert", call["argv"])
+        self.assertEqual([call for call in self.records("openssl.jsonl") if call["argv"][:1] == ["s_client"]], [])
+        self.assertEqual(self.records("timeout.jsonl"), [])
+        self.assertIsNotNone(started)
 
 
 @unittest.skipUnless(LUA, "needs lua or luajit on PATH (the smoke test runs the filter in Fluent Bit)")

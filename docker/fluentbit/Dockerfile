@@ -20,7 +20,7 @@ FROM debian:trixie-slim
 ARG FLB_VERSION=5.2.0
 COPY --from=key /fluentbit.gpg /usr/share/keyrings/fluentbit.gpg
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl && \
+    apt-get install -y --no-install-recommends ca-certificates curl openssl && \
     echo "deb [signed-by=/usr/share/keyrings/fluentbit.gpg] https://packages.fluentbit.io/debian/trixie trixie main" \
       > /etc/apt/sources.list.d/fluentbit.list && \
     apt-get update && \

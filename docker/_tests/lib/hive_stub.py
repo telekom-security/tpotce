@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """A stand-in for the ingest endpoint of a HIVE (nginx on 64294) for the smoke tests: HTTPS with a
-certificate of a test CA, every request recorded as one JSON line.
+certificate of a test CA (or a self-signed one, as T-Pot makes it), every request recorded as one JSON line.
 
-    hive_stub.py certs DIR NAME [--san SAN ...]
-        DIR/ca.crt and ca.key (made once), DIR/NAME.crt and NAME.key signed by it with the
-        subjectAltName entries given (IP:127.0.0.1, DNS:hive.test); needs openssl.
+    hive_stub.py certs DIR NAME [--self-signed] [--san SAN ...]
+        DIR/NAME.crt and NAME.key (ECDSA P-384) with the subjectAltName entries given (IP:127.0.0.1,
+        DNS:hive.test): signed by DIR/ca.crt and ca.key (P-384, made once), with --self-signed its own
+        issuer as the certificate of a HIVE; needs openssl.
     hive_stub.py serve --cert F --key F --log F [--bind IP] [--port N] [--status N | --status-file F]
                        [--probe-file F]
         Answers every request with the status given; --status-file is read on each request (an
@@ -39,21 +40,30 @@ def run(*command):
     subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
 
 
-def make_certs(folder, name, sans):
+P384 = ("-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-384", "-sha384")
+
+
+def make_certs(folder, name, sans, self_signed=False):
+    key, csr, crt = (os.path.join(folder, name + ext) for ext in (".key", ".csr", ".crt"))
+    if self_signed:
+        # as T-Pot makes the certificate of a HIVE: req -x509 with the subjectAltName entries only
+        run("openssl", "req", "-nodes", "-x509", *P384, "-keyout", key, "-out", crt, "-days", "2",
+            "-subj", "/CN=hive-stub", *(("-addext", "subjectAltName=" + ",".join(sans)) if sans else ()))
+        for path in (crt, key):
+            os.chmod(path, 0o644)
+        return
     ca_crt, ca_key = os.path.join(folder, "ca.crt"), os.path.join(folder, "ca.key")
     if not os.path.exists(ca_crt):
-        run("openssl", "req", "-x509", "-new", "-nodes", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
+        run("openssl", "req", "-x509", "-new", "-nodes", *P384,
             "-keyout", ca_key, "-out", ca_crt, "-days", "2", "-subj", "/CN=T-Pot smoke test CA",
             "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign")
-    key, csr, crt = (os.path.join(folder, name + ext) for ext in (".key", ".csr", ".crt"))
     extensions = os.path.join(folder, name + ".ext")
     with open(extensions, "w", encoding="utf-8") as handle:
         handle.write("basicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\n")
         if sans:
             handle.write("subjectAltName=" + ",".join(sans) + "\n")
-    run("openssl", "req", "-new", "-nodes", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
-        "-keyout", key, "-out", csr, "-subj", "/CN=hive-stub")
-    run("openssl", "x509", "-req", "-in", csr, "-CA", ca_crt, "-CAkey", ca_key, "-CAcreateserial",
+    run("openssl", "req", "-new", "-nodes", *P384, "-keyout", key, "-out", csr, "-subj", "/CN=hive-stub")
+    run("openssl", "x509", "-req", "-sha384", "-in", csr, "-CA", ca_crt, "-CAkey", ca_key, "-CAcreateserial",
         "-out", crt, "-days", "2", "-extfile", extensions)
     for path in (csr, extensions):
         os.remove(path)
@@ -165,6 +175,7 @@ def main(argv=None):
     certs = commands.add_parser("certs", help="make a test CA and a certificate of the stub")
     certs.add_argument("folder")
     certs.add_argument("name")
+    certs.add_argument("--self-signed", action="store_true", help="a certificate of its own, without the test CA")
     certs.add_argument("--san", action="append", default=[], help="a subjectAltName entry, e.g. IP:127.0.0.1")
     server = commands.add_parser("serve", help="answer and record requests")
     server.add_argument("--cert", required=True)
@@ -177,7 +188,7 @@ def main(argv=None):
     server.add_argument("--probe-file")
     args = parser.parse_args(argv)
     if args.command == "certs":
-        make_certs(args.folder, args.name, args.san)
+        make_certs(args.folder, args.name, args.san, args.self_signed)
     else:
         serve(args)
     return 0

@@ -218,7 +218,7 @@ Listbot is never reached (a fresh cache and stand-in dictionaries).
 `./docker/_tests/run.sh fluentbit` runs the Fluent Bit image of a SENSOR
 against a stub of the HIVE's ingest endpoint (`docker/_tests/lib/hive_stub.py`,
 HTTPS with a test CA, in the tpotinit image, `--init-image` for another). Its
-cases 1–14 cover: every fixture arrives once as its raw line with its type and
+cases 1–15 cover: every fixture arrives once as its raw line with its type and
 `t-pot_log_path`, gzipped, with Basic auth and `X-TPot-Ingest: 2`; the first
 two heartbeats; a 2 MB line skipped with a warning; an invalid byte as U+FFFD;
 503 answers and a restart without loss or duplicates; files made after the
@@ -227,7 +227,10 @@ start; `FLB_STORAGE_LIMIT` reached; TLS verification by address and name; uid
 `/tpot-ingest`, first without the SENSOR's login and with it only after `401`
 with `X-TPot-Ingest: login` (an old HIVE that never gets the login, a HIVE
 whose Logstash is not ready, a busy one, then one that takes the format, and
-one that does not accept the login); and an outage under load without loss.
+one that does not accept the login); and an outage under load without loss;
+the trust file: `hive.crt` pinned when one of its certificates verifies itself
+(the HIVE's own, or a leaf with the root of its CA appended), else the system
+store, and the TLS verdict for a leaf whose CA it lacks.
 `--cases 3,7` runs only some. All cases take about 22 minutes, case 13 alone
 about 17.
 

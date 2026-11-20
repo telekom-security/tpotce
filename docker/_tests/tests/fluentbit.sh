@@ -17,7 +17,7 @@ INIT_IMAGE=""
 # of a Debian docker) 120 s of load lost no line, 240 s only now and then; the files of Fluent Bit reach
 # the limit after about 240 s, so 360 s
 OUTAGE_SECONDS=360
-CASES="1,2,3,4,5,6,7,8,9,10,11,12,13,14"
+CASES="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15"
 CASES_GIVEN=no
 # what tpotinit writes into elk_environment of a SENSOR, and the access of the sensor at the HIVE
 SMOKE_HOSTNAME="sensor-smoke"
@@ -26,6 +26,8 @@ SMOKE_INTIP="10.0.0.7"
 SMOKE_VERSION="$(tr -d '[:space:]' < "${REPO_ROOT}/version")"
 SMOKE_AUTH="$(printf '%s' 'sensor-smoke:not-a-secret' | base64)"
 CERTS=""
+# the certificates of CERTS that prepare_run puts into hive.crt, in this order (HIVE_CRT=self prepare_run ...)
+HIVE_CRT="ca"
 RUN_DIR=""
 RUN_START=""
 HEALTH_INTERVAL=""
@@ -33,6 +35,9 @@ HEALTH_INTERVAL=""
 NOFILE_SOFT=""
 NOFILE_HARD=""
 NOFILE_SOURCE=""
+# the TLS verdicts of the entrypoint (REASON: the text of openssl)
+TLS_PINNED="The HIVE's certificate is not trusted (REASON); on the HIVE, tpot sensors cert --distribute copies its certificate here (after --renew if it expired)."
+TLS_SYSTEM="The HIVE's certificate is not trusted (REASON); with a certificate of your own CA, append the root of that CA to nginx.crt on the HIVE, then run tpot sensors cert --distribute there."
 
 usage() {
   cat <<EOF
@@ -62,7 +67,8 @@ the tpotinit image without a network, Fluent Bit shares its network namespace
      dropped with a log line, Fluent Bit keeps running, the newest lines
      arrive after the 503.
   8  TLS: the HIVE as 127.0.0.1 and as hive.test is verified and delivers, a
-     certificate without the address delivers nothing and the log names it.
+     certificate without the address delivers nothing and the TLS verdict of
+     the entrypoint names it.
   9  uid 2000, a read-only root, healthy, the plugins tail, dummy, lua and
      http, and the entrypoint refuses an empty TPOT_HIVE_IP / TPOT_HIVE_USER
      or a wrong LS_SSL_VERIFICATION, FLB_PROBE_INTERVAL or FLB_STORAGE_LIMIT.
@@ -79,6 +85,10 @@ the tpotinit image without a network, Fluent Bit shares its network namespace
  14  The HIVE answers 401 with X-TPot-Ingest login to the login as well (it does
      not accept it): no POST, each round asks without the login, then with it,
      the message names it, the container stays healthy for 3 checks in a row.
+ 15  The trust file: a self-signed hive.crt (pinned), a leaf of a CA as hive.crt
+     with that CA as the system store (FLB_SYSTEM_CA) and the leaf with the root
+     of its CA appended (pinned) deliver; the leaf alone with the image's own
+     store delivers nothing and the TLS verdict names the missing root.
 
 Fluent Bit runs with the file limit (ulimits nofile) of compose/sensor.yml; where
 it has none, with soft 1024 / hard 524288, what a Debian docker gives a container
@@ -93,7 +103,7 @@ Options:
   --image IMAGE       Fluent Bit image to test. Defaults to docker/fluentbit/docker-compose.yml.
   --init-image IMAGE  Image the stub runs in (python3 with ssl, openssl). Defaults to
                       docker/tpotinit/docker-compose.yml.
-  --cases LIST        Only these cases (comma separated numbers 1-14). Default: all.
+  --cases LIST        Only these cases (comma separated numbers 1-15). Default: all.
   --timeout SEC       Time to wait for a delivery (at least 120 s are used; case 13
                       waits for the lines of its outage while Fluent Bit holds
                       chunks, at least 2100 s).
@@ -122,9 +132,9 @@ parse_args() {
     esac
   done
   local case
-  [[ "${CASES}" =~ ^[0-9]+(,[0-9]+)*$ ]] || test_die "--cases takes numbers 1-14, comma separated: ${CASES}"
+  [[ "${CASES}" =~ ^[0-9]+(,[0-9]+)*$ ]] || test_die "--cases takes numbers 1-15, comma separated: ${CASES}"
   for case in ${CASES//,/ }; do
-    (( 10#${case} >= 1 && 10#${case} <= 14 )) || test_die "--cases takes numbers 1-14, comma separated: ${CASES}"
+    (( 10#${case} >= 1 && 10#${case} <= 15 )) || test_die "--cases takes numbers 1-15, comma separated: ${CASES}"
   done
 }
 
@@ -643,6 +653,8 @@ write_compose() {
     done
     printf '    volumes:\n'
     printf '      - "%s/data:/data"\n' "${RUN_DIR}"
+    # case 15: the test CA as the system store of Fluent Bit (FLB_SYSTEM_CA=/smoke/ca.crt)
+    printf '      - "%s/ca.crt:/smoke/ca.crt:ro"\n' "${CERTS}"
   } > "${TEST_HARNESS_COMPOSE}"
 }
 
@@ -654,7 +666,10 @@ prepare_run() {
   shift
   mkdir -p "${RUN_DIR}/data/tpot/etc/compose" "${RUN_DIR}/data/fluentbit/storage" "${RUN_DIR}/stub"
   checker folders "${RUN_DIR}/data" "$@"
-  cp "${CERTS}/ca.crt" "${RUN_DIR}/data/hive.crt"
+  local name
+  for name in ${HIVE_CRT}; do
+    cat "${CERTS}/${name}.crt"
+  done > "${RUN_DIR}/data/hive.crt"
   cat > "${RUN_DIR}/data/tpot/etc/compose/elk_environment" <<EOF
 HONEY_UUID=00000000-0000-4000-8000-000000000000
 MY_EXTIP=${SMOKE_EXTIP}
@@ -827,10 +842,36 @@ run_tls() {
   prepare_run tls-wrong
   start_run wrong
   checker nothing "${RUN_DIR}" 15
-  flb_logs | grep -i -E "tls|certificate|verify" >/dev/null || test_die "No TLS error in the log of Fluent Bit"
-  flb_logs | grep -i -E "The HIVE is not reachable \(curl: \([0-9]+\).*(certificate|ssl|tls)" >/dev/null \
-    || test_die "The probe does not name the TLS error of curl"
-  test_ok "8 TLS: 127.0.0.1 and hive.test deliver; a wrong certificate: $(flb_logs | grep -i -E 'tls|certificate|verify' | head -n 1)"
+  # hive.crt is the root of the test CA: pinned, the verdict names the reason and the way out
+  flb_logs | grep -F "${TLS_PINNED/REASON/IP address mismatch}" >/dev/null \
+    || test_die "The TLS verdict does not name the wrong certificate: $(flb_logs | tail -n 3)"
+  test_ok "8 TLS: 127.0.0.1 and hive.test deliver; a wrong certificate: $(flb_logs | grep -F 'is not trusted' | head -n 1)"
+  stop_run
+}
+
+# Run trust (case 15): hive.crt pinned when one of its certificates verifies itself, else the system store
+# (FLB_SYSTEM_CA), for the probe and for Fluent Bit (tls.ca_file)
+run_trust() {
+  HIVE_CRT=self prepare_run trust-self
+  start_run self
+  wait_for_log "The HIVE takes this SENSOR's format; Fluent Bit starts." 30
+  checker heartbeats "${RUN_DIR}" "${RUN_START}" 1
+  stop_run
+  HIVE_CRT=hive prepare_run trust-store
+  start_run hive FLB_SYSTEM_CA=/smoke/ca.crt
+  wait_for_log "The HIVE takes this SENSOR's format; Fluent Bit starts." 30
+  checker heartbeats "${RUN_DIR}" "${RUN_START}" 1
+  stop_run
+  HIVE_CRT="hive ca" prepare_run trust-chain
+  start_run hive
+  wait_for_log "The HIVE takes this SENSOR's format; Fluent Bit starts." 30
+  checker heartbeats "${RUN_DIR}" "${RUN_START}" 1
+  stop_run
+  HIVE_CRT=hive prepare_run trust-leaf
+  start_run hive
+  wait_for_log "${TLS_SYSTEM/REASON/unable to get local issuer certificate}" 30
+  checker nothing "${RUN_DIR}" 5
+  test_ok "15 trust file: a self-signed hive.crt, a CA leaf with its CA as the system store and a leaf with its root appended deliver; the leaf alone: $(flb_logs | grep -F 'is not trusted' | head -n 1)"
   stop_run
 }
 
@@ -1047,6 +1088,7 @@ main() {
   mkdir -p "${CERTS}"
   make_certs hive --san IP:127.0.0.1 --san DNS:hive.test
   make_certs wrong --san DNS:other.test
+  make_certs self --self-signed --san IP:127.0.0.1 --san DNS:hive.test
   read_nofile
   test_info "Testing ${IMAGE} (stub in ${INIT_IMAGE}), cases ${CASES}"
   test_info "File limit of Fluent Bit ${NOFILE_SOFT}/${NOFILE_HARD} (${NOFILE_SOURCE})"
@@ -1056,6 +1098,7 @@ main() {
   if wanted 8; then run_tls; fi
   if wanted 10 || wanted 11 || wanted 12; then run_probe; fi
   if wanted 14; then run_login; fi
+  if wanted 15; then run_trust; fi
   if wanted 9; then run_image; fi
   if wanted 13; then run_outage; fi
   test_ok "fluentbit smoke test passed (cases ${CASES})"
