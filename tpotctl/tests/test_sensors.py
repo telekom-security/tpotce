@@ -201,20 +201,35 @@ class HelpersTest(unittest.TestCase):
         failing = mock.Mock(side_effect=OSError("connection refused"))
         self.assertIn("cannot be asked", sensors.fetch_status(opener=failing).problem)
 
-    def test_ingest_probe_is_limited_per_address_and_in_total(self):
-        # C4: the open probe of the SENSORs is limited per address and over all addresses together
-        with open(os.path.join(REPO_DIR, "docker", "nginx", "dist", "conf", "lsweb.conf")) as handle:
+    def test_ingest_probe_is_limited_per_address_before_the_login(self):
+        # the probe asks for the SENSOR's login after a limit per address, a missing or wrong one gets
+        # 401 with a marker of its own (no WWW-Authenticate): an old HIVE answers a plain 401
+        conf = os.path.join(REPO_DIR, "docker", "nginx", "dist", "conf")
+        with open(os.path.join(conf, "lsweb.conf")) as handle:
             text = handle.read()
+
+        def block(start):
+            part = text[text.index(start):]
+            return part[:part.index("\n    }\n")]
+
         self.assertIn("limit_req_zone $binary_remote_addr zone=tpot_ingest:1m rate=1r/s;", text)
-        self.assertIn("limit_req_zone $server_name zone=tpot_ingest_all:1m rate=10r/s;", text)
-        probe = text[text.index("location = /tpot-ingest {"):]
-        probe = probe[:probe.index("\n    }\n")]
-        self.assertIn("limit_req zone=tpot_ingest burst=5 nodelay;", probe)
-        self.assertIn("limit_req zone=tpot_ingest_all burst=20 nodelay;", probe)
-        self.assertIn("limit_req_status 429;", probe)
-        root = text[text.index("location / {"):]
-        root = root[:root.index("\n    }\n")]
-        self.assertNotIn("tpot_ingest_all", root)
+        self.assertNotIn("tpot_ingest_all", text)
+        probe = block("location = /tpot-ingest {")
+        for line in ("limit_req zone=tpot_ingest burst=5 nodelay;", "limit_req_status 429;",
+                     'auth_basic "closed site";', "auth_basic_user_file /etc/nginx/lswebpasswd;",
+                     "error_page 401 = @tpot_ingest_login;"):
+            self.assertIn(line, probe)
+        login = block("location @tpot_ingest_login {")
+        self.assertIn("more_clear_headers WWW-Authenticate;", login)
+        self.assertIn("add_header X-TPot-Ingest login always;", login)
+        for name in ("lsweb.conf", "tpotweb.conf"):
+            with open(os.path.join(conf, name)) as handle:
+                server = handle.read()
+            self.assertIn("ssl_ecdh_curve X25519MLKEM768:X25519:secp384r1;", server, name)
+            self.assertNotIn("ssl_dhparam", server, name)
+        self.assertFalse(os.path.exists(os.path.join(conf, "ssl")))
+        with open(os.path.join(REPO_DIR, "docker", "nginx", "Dockerfile")) as handle:
+            self.assertNotIn("ssl", handle.read())
 
 
 class HeartbeatTest(unittest.TestCase):

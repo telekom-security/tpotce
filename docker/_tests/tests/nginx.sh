@@ -32,12 +32,14 @@ Usage: $0 [options]
 Run an isolated post-build smoke test for the Nginx image: the landing page behind
 the login, its security headers and caching, and the neutral error page; the ingest
 listener of a HIVE (64294) with a stand-in for Logstash: the login, large batches and
-the capability probe /tpot-ingest of the SENSORs against a new and an old Logstash, and
-its limit over all addresses (30 senders in containers of their own, the init image).
+the capability probe /tpot-ingest of the SENSORs (its limit per address, then the
+login of the SENSOR, then Logstash) against a new and an old Logstash, 30 senders
+without a login at once (containers of their own, the init image), and the key
+exchange and key of the TLS handshake (openssl of the init image).
 
 Options:
   --image IMAGE      Image to test. Defaults to docker/nginx/docker-compose.yml.
-  --init-image IMAGE Image the Logstash stand-in runs in (python3). Defaults to
+  --init-image IMAGE Image the Logstash stand-in, the senders and openssl run in. Defaults to
                      docker/tpotinit/docker-compose.yml.
   --https-port PORT  Host TCP port for the web UI (64297 in T-Pot). Default: dynamic loopback port.
   --timeout SEC      Timeout for startup and checks. Default: 30.
@@ -134,8 +136,9 @@ prepare_nginx_harness() {
   chmod 0755 "${CERT_DIR}"
   chmod 0777 "${LOG_DIR}"
 
-  # the checks trust this certificate and nothing else (no switched off verification)
-  openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 1 -subj "/CN=localhost" \
+  # the checks trust this certificate and nothing else (no switched off verification); an ECDSA
+  # P-384 key, the handshake check (run_tls_checks) looks for its size
+  openssl req -x509 -nodes -newkey ec -pkeyopt ec_paramgen_curve:P-384 -sha384 -days 1 -subj "/CN=localhost" \
     -addext "subjectAltName=IP:${TEST_BIND_IP},DNS:localhost" \
     -keyout "${CERT_DIR}/nginx.key" -out "${CERT_DIR}/nginx.crt" >/dev/null 2>&1 \
     || test_die "Could not create a test certificate with openssl"
@@ -306,7 +309,8 @@ PY
 # A stand-in for Logstash under the name logstash: 64305 (the sensors input) records every request
 # and answers 200; 64306 (the probe input of a new Logstash) records too and answers 204 with the
 # marker and headers that must not reach the client. /state/mode: "new" (default), "200" (the probe
-# port answers 200 with the marker and a body), "old" (no listener on 64306, as a Logstash before it)
+# port answers 200 with the marker and a body), "401" (the probe port asks for a login of its own),
+# "old" (no listener on 64306, as a Logstash before it)
 write_logstash_standin() {
   cat > "${STATE_DIR}/logstash.py" <<'PY'
 import http.server
@@ -348,6 +352,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", "9")
             self.end_headers()
             self.wfile.write(b"LEAK-BODY")
+        elif mode() == "401":
+            self.send_response(401)
+            self.send_header("X-TPot-Ingest", "2")
+            self.send_header("WWW-Authenticate", 'Basic realm="stand-in"')
+            self.send_header("Content-Length", "9")
+            self.end_headers()
+            self.wfile.write(b"LEAK-BODY")
         else:
             self.send_response(204)
             self.send_header("X-TPot-Ingest", "2")
@@ -382,9 +393,10 @@ while True:
 PY
 }
 
-# A sender of the burst: one container, one source address, one GET /tpot-ingest. It says it runs
-# (ready/), opens its TLS connection once armed (connected/; nginx closes an idle one after 10 s, so
-# not before), sends its request once the go file is there and writes the status (result/)
+# A sender of the burst: one container, one source address, one GET /tpot-ingest without a login. It
+# says it runs (ready/), opens its TLS connection once armed (connected/; nginx closes an idle one
+# after 10 s, so not before), sends its request once the go file is there and writes the status and
+# the marker (result/)
 write_burst_sender() {
   mkdir -p "${BURST_DIR}/ready" "${BURST_DIR}/connected" "${BURST_DIR}/result"
   cat > "${BURST_DIR}/sender.py" <<'PY'
@@ -420,7 +432,8 @@ mark("connected")
 wait_for("/burst/go")
 try:
     conn.request("GET", "/tpot-ingest")
-    status = str(conn.getresponse().status)
+    response = conn.getresponse()
+    status = f"{response.status} {response.getheader('X-TPot-Ingest', '-')}"
 except OSError as error:
     status = f"error {error}"
 mark("result", status)
@@ -490,10 +503,10 @@ def set_mode(value):
     raise SystemExit(f"FAIL the stand-in did not switch to {value}")
 
 
-def probe(method="GET", headers=None):
+def probe(method="GET", login=True, headers=None):
     # one request a second: the probe is limited to 1 r/s per address (burst 5)
     time.sleep(1.1)
-    return ask(method, "/tpot-ingest", headers=headers)
+    return ask(method, "/tpot-ingest", login=login, headers=headers)
 
 
 # wait until nginx and the stand-in answer
@@ -521,9 +534,20 @@ check("ingest: a 3 MB batch with the login is passed on (not 413)",
 check("ingest: the sensor user goes to Logstash",
       any(r["headers"].get("x-tpot-sensor") == user for r in new))
 
-# new Logstash: 204 with the marker, without a login, nothing of the client or of Logstash passed on
+# no login: 401 with the marker of this HIVE and no WWW-Authenticate, nothing reaches Logstash
+wrong = "Basic " + base64.b64encode(f"{user}:wrong-{password}".encode()).decode()
+for what, sent in (("no login", {"X-Client": "secret"}), ("a wrong login", {"Authorization": wrong})):
+    before = len(requests())
+    status, headers, body = probe(login=False, headers=sent)
+    check(f"probe, {what}: 401", status == 401)
+    check(f"probe, {what}: X-TPot-Ingest login, once", headers.get_all("X-TPot-Ingest") == ["login"])
+    check(f"probe, {what}: no WWW-Authenticate", headers.get("WWW-Authenticate") is None)
+    check(f"probe, {what}: says a login is required", body == b"login required\n")
+    check(f"probe, {what}: no request reaches Logstash (64306 or 64305)", requests()[before:] == [])
+
+# new Logstash and a valid login: 204 with the marker, nothing of the client or of Logstash passed on
 before = len(requests())
-status, headers, body = probe(headers={"Authorization": auth, "X-Client": "secret", "Cookie": "c=1"})
+status, headers, body = probe(headers={"X-Client": "secret", "Cookie": "c=1"})
 check("probe, new Logstash: 204", status == 204)
 check("probe, new Logstash: X-TPot-Ingest 2, once", headers.get_all("X-TPot-Ingest") == ["2"])
 check("probe, new Logstash: no body", body == b"")
@@ -532,38 +556,50 @@ check("probe, new Logstash: no header of the stand-in",
 new = requests()[before:]
 check("probe, new Logstash: one GET on 64306, nothing on 64305",
       [(r["port"], r["method"]) for r in new] == [(64306, "GET")])
-check("probe, new Logstash: no header or body of the client reaches Logstash",
+check("probe, new Logstash: no header or body of the client (the login neither) reaches Logstash",
       all(not ({"authorization", "x-client", "cookie", "x-tpot-sensor"} & set(r["headers"])) and r["length"] == 0
           for r in new))
-status, headers, body = probe(headers={"X-Client": "secret"})
-check("probe, new Logstash: 204 without any login", status == 204 and headers.get("X-TPot-Ingest") == "2")
 status, headers, _ = probe("HEAD")
-check("probe: HEAD works too", status == 204 and headers.get("X-TPot-Ingest") == "2")
-before = len(requests())
-status, headers, _ = ask("POST", "/tpot-ingest", body=b"{}", headers={"Content-Type": "application/json"})
-check("probe: 405 for POST, nothing to Logstash",
-      status == 405 and headers.get("X-TPot-Ingest") is None and requests()[before:] == [])
+check("probe: HEAD with the login works too", status == 204 and headers.get_all("X-TPot-Ingest") == ["2"])
+for login in (False, True):
+    before = len(requests())
+    status, headers, _ = ask("POST", "/tpot-ingest", login=login, body=b"{}",
+                             headers={"Content-Type": "application/json"})
+    check(f"probe: 405 for POST {'with' if login else 'without'} a login, nothing to Logstash",
+          status == 405 and headers.get("X-TPot-Ingest") is None and requests()[before:] == [])
 
-# a probe port that answers anything but 204: 503 without the marker, no body of Logstash
+# a probe port that answers anything but 204: 503 without the marker, no body of Logstash; its 401
+# must not look like a refused login of the SENSOR
 set_mode("200")
 status, headers, body = probe()
 check("probe, 200 of Logstash: 503 without the marker",
       status == 503 and headers.get("X-TPot-Ingest") is None and b"LEAK" not in body)
+set_mode("401")
+status, headers, body = probe()
+check("probe, 401 of Logstash: 503 without a marker or WWW-Authenticate",
+      status == 503 and headers.get("X-TPot-Ingest") is None and headers.get("WWW-Authenticate") is None
+      and body == b"ingest pipeline not ready\n")
 
 # old Logstash (no probe input): 503 without the marker, and no event could be made
 set_mode("old")
 before = len(requests())
-status, headers, body = probe(headers={"Authorization": auth})
+status, headers, body = probe()
 check("probe, old Logstash: 503", status == 503)
 check("probe, old Logstash: no marker", headers.get("X-TPot-Ingest") is None)
 check("probe, old Logstash: says the pipeline is not ready", body == b"ingest pipeline not ready\n")
 check("probe, old Logstash: nothing reached the 64305 input", requests()[before:] == [])
 
-# the probe is open without a login: a few a second per address, then 429
+# the limit per address comes before the login: a few a second, then 429, and none reaches Logstash
 set_mode("new")
 time.sleep(6)
-codes = [ask("GET", "/tpot-ingest")[0] for _ in range(12)]
-check(f"probe: 429 beyond the burst ({codes})", 429 in codes and codes[0] == 204)
+before = len(requests())
+answers = [ask("GET", "/tpot-ingest") for _ in range(12)]
+codes = [status for status, _, _ in answers]
+check(f"probe without a login: 401 first, 429 beyond the burst ({codes})",
+      codes[0] == 401 and 429 in codes and set(codes) == {401, 429})
+check("probe without a login: every 401 has the marker",
+      all(headers.get("X-TPot-Ingest") == "login" for status, headers, _ in answers if status == 401))
+check("probe without a login: no request of the burst reaches Logstash", requests()[before:] == [])
 
 if failures:
     print(f"{len(failures)} check(s) failed")
@@ -571,9 +607,9 @@ if failures:
 PY
 }
 
-# C4: /tpot-ingest is also limited over all addresses (10 r/s, burst 20): 30 senders with an address
-# of their own each (so the limit per address, 1 r/s burst 5, lets each one through) send one GET at
-# the same time; the first 21 pass, the rest beyond what the 10 r/s refill in the meantime gets 429
+# /tpot-ingest has no limit over all addresses: 30 senders with an address of their own each send one
+# GET without a login at the same time, each gets the 401 with the marker (none a 429), and none of
+# them reaches Logstash
 run_ingest_burst() {
   local senders=30 rc=0
   # the senders belong to the project: the down of the cleanup takes them too
@@ -581,15 +617,20 @@ run_ingest_burst() {
   test_info "Starting ${senders} senders for the burst on /tpot-ingest"
   test_compose up -d --no-build --no-deps --scale "sender=${senders}" sender >/dev/null \
     || test_die "Could not start the senders of the burst"
-  python3 - "${BURST_DIR}" "${senders}" "${TEST_TIMEOUT}" <<'PY' || rc=$?
+  python3 - "${BURST_DIR}" "${senders}" "${TEST_TIMEOUT}" "${STATE_DIR}" <<'PY' || rc=$?
 import os
 import sys
 import time
 
-burst, senders, timeout = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
-# the checks before have run up to 20 requests beyond the 10 r/s of the zone over all addresses: those
-# drain within 2 s, so the bucket is full again 2.5 s after the last of them (this script starts later)
-full = time.monotonic() + 2.5
+burst, senders, timeout, state = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4]
+
+
+def requests():
+    try:
+        with open(os.path.join(state, "requests"), encoding="utf-8") as handle:
+            return sum(1 for line in handle if line.strip())
+    except OSError:
+        return 0
 
 
 def wait_for(folder, seconds):
@@ -605,7 +646,7 @@ wait_for("ready", timeout)
 open(os.path.join(burst, "arm"), "w").close()
 # nginx closes a connection without a request after 10 s (client_header_timeout)
 wait_for("connected", 8)
-time.sleep(max(0.0, full - time.monotonic()))
+before = requests()
 open(os.path.join(burst, "go"), "w").close()
 wait_for("result", timeout)
 codes = []
@@ -613,11 +654,38 @@ for name in sorted(os.listdir(os.path.join(burst, "result"))):
     with open(os.path.join(burst, "result", name), encoding="utf-8") as handle:
         codes.append(handle.read())
 counts = {code: codes.count(code) for code in sorted(set(codes))}
-ok = codes.count("204") >= 20 and codes.count("429") > 0 and codes.count("204") + codes.count("429") == senders
-print(("ok   " if ok else "FAIL ") + f"probe: {senders} senders at once, 204 at least 20 times, some 429 ({counts})")
-sys.exit(0 if ok else 1)
+ok = len(codes) == senders and set(codes) == {"401 login"}
+print(("ok   " if ok else "FAIL ") + f"probe: {senders} senders without a login at once, all 401 with the marker, "
+      f"none 429 ({counts})")
+reached = requests() - before
+print(("ok   " if reached == 0 else "FAIL ") + f"probe: none of the {senders} senders reaches Logstash ({reached})")
+sys.exit(0 if ok and reached == 0 else 1)
 PY
   test_compose rm -sf sender >/dev/null 2>&1 || true
+  return "${rc}"
+}
+
+# The handshake of both listeners (openssl of the init image, in the network of the nginx container):
+# the post-quantum hybrid key exchange of ssl_ecdh_curve and the P-384 key of the test certificate
+run_tls_checks() {
+  local port output rc=0
+  for port in 64294 64297; do
+    output="$(docker run --rm --network "container:${TEST_CONTAINER_NAME}" --entrypoint openssl "${INIT_IMAGE}" \
+      s_client -connect "127.0.0.1:${port}" -groups X25519MLKEM768 </dev/null 2>&1)" || true
+    if grep -q "group: X25519MLKEM768" <<<"${output}"; then
+      echo "ok   TLS ${port}: the key exchange is X25519MLKEM768"
+    else
+      echo "FAIL TLS ${port}: the key exchange is not X25519MLKEM768"
+      rc=1
+    fi
+    if grep -q "Server public key is 384 bit" <<<"${output}"; then
+      echo "ok   TLS ${port}: the server key is 384 bit"
+    else
+      echo "FAIL TLS ${port}: the server key is not 384 bit"
+      rc=1
+    fi
+    [[ "${rc}" -eq 0 ]] || printf '%s\n' "${output}" | grep -E "group|Server public key|error|Cipher" >&2 || true
+  done
   return "${rc}"
 }
 
@@ -656,7 +724,8 @@ main() {
   MAPPED_INGEST_PORT="$(test_get_mapped_port nginx 64294)" || test_die "Could not resolve the mapped ingest port"
   test_info "The ingest listener is on https://${TEST_BIND_IP}:${MAPPED_INGEST_PORT}"
   run_ingest_checks || test_die "Nginx ingest checks failed"
-  run_ingest_burst || test_die "Nginx ingest limit over all addresses failed"
+  run_ingest_burst || test_die "Nginx ingest probe of many senders failed"
+  run_tls_checks || test_die "Nginx TLS handshake checks failed"
   test_ok "Nginx smoke test passed"
 }
 

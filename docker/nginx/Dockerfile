@@ -19,7 +19,6 @@ RUN mkdir -p /out/var/lib/nginx/html /out/etc/nginx/conf.d && \
     find /out/var/lib/nginx/html -type d -exec chmod 755 {} \; && \
     find /out/var/lib/nginx/html -type f -exec chmod 644 {} \; && \
     cp /work/dist/conf/nginx.conf /out/etc/nginx/ && \
-    cp -R /work/dist/conf/ssl /out/etc/nginx/ && \
     cp /work/dist/conf/tpotweb.conf /out/etc/nginx/conf.d/ && \
     cp /work/dist/conf/lsweb.conf /out/etc/nginx/conf.d/
 
@@ -36,7 +35,6 @@ RUN apk --no-cache -U upgrade && \
 ## Add prepared web assets and Nginx / T-Pot specific configs
 COPY --from=assets --chown=root:www-data /out/var/lib/nginx/html/ /var/lib/nginx/html/
 COPY --from=assets /out/etc/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY --from=assets /out/etc/nginx/ssl/ /etc/nginx/ssl/
 COPY --from=assets /out/etc/nginx/conf.d/tpotweb.conf /etc/nginx/conf.d/tpotweb.conf
 COPY --from=assets /out/etc/nginx/conf.d/lsweb.conf /etc/nginx/conf.d/lsweb.conf
 #
