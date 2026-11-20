@@ -4,6 +4,7 @@ values of its configuration are read here as YAML, its Lua filter runs with the 
 where there is one. The smoke test docker/_tests/tests/fluentbit.sh runs the image against a stub
 HIVE (docker/_tests/lib/hive_stub.py)."""
 
+import base64
 import contextlib
 import io
 import json
@@ -11,6 +12,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import types
 import unittest
@@ -140,18 +142,210 @@ class ConfigTest(unittest.TestCase):
         # tpotinit takes leading zeros (0512): they go before the check (the smoke test runs 0512M)
         self.assertLess(text.index("^0+([0-9][0-9]*[KMG]?)$"), text.index("^[1-9][0-9]*[KMG]?$"))
         self.assertRegex(text, r"FLB_STORAGE_LIMIT is .*TPOT_SENSOR_BUFFER_MB")
-        # E2: the probe of the HIVE before Fluent Bit starts (the smoke test runs every answer)
+        # E2: the probe of the HIVE before Fluent Bit starts (ProbeTest and the smoke test run every answer)
         self.assertLess(text.index("\nfuPROBE\n"), text.index("\nexec fluent-bit"))
-        for message in ("The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here.",
+        for message in ("The HIVE takes this SENSOR's format; Fluent Bit starts.",
+                        "The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here.",
+                        "The HIVE does not accept this SENSOR's login (TPOT_HIVE_USER); tpot sensors list on the HIVE "
+                        "shows its access; logs wait here.",
                         "The HIVE's Logstash pipeline is not ready for this SENSOR format; logs wait here.",
-                        "The HIVE is not reachable ("):
+                        "The HIVE is not reachable (HTTP ${myCODE}).",
+                        "The HIVE is not reachable (${myERROR:-no answer})."):
             self.assertIn(message, text)
-        # C4: a busy HIVE (its global limit of /tpot-ingest) has its own line, before the generic one
-        busy = "The HIVE is busy (HTTP 429), next probe in ${FLB_PROBE_INTERVAL} s."
+        # C4 / I1: a busy HIVE (its limit per address of /tpot-ingest) has its own line, before the generic one
+        busy = "The HIVE is busy (HTTP 429), next probe in ${myWAIT} s."
         self.assertIn(busy, text)
         self.assertLess(text.index(busy), text.index("The HIVE is not reachable (HTTP"))
+        self.assertIn("myWAIT=$((15 + RANDOM % 31))", text)
         self.assertIn("https://${TPOT_HIVE_IP}:${TPOT_HIVE_PORT}/tpot-ingest", text)
         self.assertIn('"${FLB_PROBE_INTERVAL:-300}"', text)
+        # the login goes to curl from a file, never in its argv
+        self.assertIn("-H @", text)
+        self.assertIn('"${FLB_PROBE_DIR:-/tmp}"', text)
+
+
+@unittest.skipUnless(shutil.which("bash"), "needs bash")
+class ProbeTest(unittest.TestCase):
+    """E2 / I1: the entrypoint probes /tpot-ingest of the HIVE in two stages each round, without the
+    SENSOR's login and, only after a 401 with X-TPot-Ingest login, with it. It runs with the bash of PATH
+    (it stays bash 3.2 compatible) and stubs: curl answers stage 1 (no -H) from answer-1 and stage 2 from
+    answer-2 (one line per call, "CODE [MARK]", the last line stays), sleep records its seconds and sends
+    TERM to the entrypoint at its `sleeps`-th call, fluent-bit records the files of FLB_PROBE_DIR."""
+
+    AUTH = base64.b64encode(b"sensor-x:secret").decode()
+    OLD = "The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here."
+    START = "The HIVE takes this SENSOR's format; Fluent Bit starts."
+    LOGIN = ("The HIVE does not accept this SENSOR's login (TPOT_HIVE_USER); tpot sensors list on the HIVE "
+             "shows its access; logs wait here.")
+    PIPELINE = "The HIVE's Logstash pipeline is not ready for this SENSOR format; logs wait here."
+    BUSY = re.compile(r"The HIVE is busy \(HTTP 429\), next probe in (\d+) s\.")
+
+    CURL = """#!{python}
+import json, os, sys
+stub = {stub!r}
+args = sys.argv[1:]
+call = {{"argv": args, "header": None}}
+headers = None
+stage = "1"
+for index, arg in enumerate(args[:-1]):
+    if arg == "-D":
+        headers = args[index + 1]
+    elif arg == "-H":
+        stage = "2"
+        call["header"] = args[index + 1]
+        if args[index + 1].startswith("@"):
+            path = args[index + 1][1:]
+            try:
+                with open(path, encoding="utf-8") as handle:
+                    call["auth"] = handle.read()
+                call["mode"] = os.stat(path).st_mode & 0o777
+            except OSError as error:
+                call["auth"] = str(error)
+with open(os.path.join(stub, "curl.jsonl"), "a", encoding="utf-8") as handle:
+    handle.write(json.dumps(call) + "\\n")
+answers = os.path.join(stub, "answer-" + stage)
+with open(answers, encoding="utf-8") as handle:
+    lines = handle.read().splitlines()
+if len(lines) > 1:
+    with open(answers, "w", encoding="utf-8") as handle:
+        handle.write("\\n".join(lines[1:]) + "\\n")
+code, _, mark = lines[0].partition(" ")
+with open(headers, "w", encoding="utf-8") as handle:
+    handle.write("HTTP/1.1 " + code + " Stub\\r\\n" + ("X-TPot-Ingest: " + mark + "\\r\\n" if mark else "") + "\\r\\n")
+"""
+
+    SLEEP = """#!{python}
+import json, os, signal, sys
+stub, probe = {stub!r}, {probe!r}
+with open(os.path.join(stub, "sleep.jsonl"), "a", encoding="utf-8") as handle:
+    handle.write(json.dumps({{"seconds": sys.argv[1], "files": sorted(os.listdir(probe))}}) + "\\n")
+with open(os.path.join(stub, "sleep.jsonl"), encoding="utf-8") as handle:
+    count = len(handle.read().splitlines())
+with open(os.path.join(stub, "sleeps"), encoding="utf-8") as handle:
+    if count >= int(handle.read()):
+        os.kill(os.getppid(), signal.SIGTERM)
+"""
+
+    FLUENT_BIT = """#!{python}
+import json, os, sys
+stub, probe = {stub!r}, {probe!r}
+with open(os.path.join(stub, "fluent-bit.json"), "w", encoding="utf-8") as handle:
+    json.dump({{"argv": sys.argv[1:], "files": sorted(os.listdir(probe))}}, handle)
+"""
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.folder = Path(folder.name)
+        self.stub = self.folder / "stub"
+        self.probe = self.folder / "probe"
+        self.bin = self.folder / "bin"
+        for path in (self.stub, self.probe, self.bin):
+            path.mkdir()
+        values = {"python": sys.executable, "stub": str(self.stub), "probe": str(self.probe)}
+        for name, text in (("curl", self.CURL), ("sleep", self.SLEEP), ("fluent-bit", self.FLUENT_BIT)):
+            (self.bin / name).write_text(text.format(**values), encoding="utf-8")
+            (self.bin / name).chmod(0o755)
+
+    def run_probe(self, stage1, stage2=("500",), sleeps=1, **env):
+        """The entrypoint with these answers; (result, curl calls, sleeps, what fluent-bit saw or None)."""
+        (self.stub / "answer-1").write_text("\n".join(stage1) + "\n", encoding="utf-8")
+        (self.stub / "answer-2").write_text("\n".join(stage2) + "\n", encoding="utf-8")
+        (self.stub / "sleeps").write_text(str(sleeps), encoding="utf-8")
+        environ = {"PATH": f"{self.bin}{os.pathsep}{os.environ.get('PATH', '')}",
+                   "TPOT_HIVE_IP": "192.0.2.10", "TPOT_HIVE_USER": self.AUTH, "FLB_PROBE_DIR": str(self.probe),
+                   "TPOT_HIVE_CRT": str(self.folder / "hive.crt"),
+                   "FLB_SYSTEM_CA": str(self.folder / "ca-certificates.crt"), "LS_SSL_VERIFICATION": "none", **env}
+        result = subprocess.run(["bash", str(DIST / "entrypoint.sh")], env=environ, capture_output=True,
+                                text=True, timeout=60, check=False)
+
+        def lines(name):
+            path = self.stub / name
+            return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
+
+        started = self.stub / "fluent-bit.json"
+        return (result, lines("curl.jsonl"), lines("sleep.jsonl"),
+                json.loads(started.read_text(encoding="utf-8")) if started.exists() else None)
+
+    def test_a_hive_of_this_release_starts_fluent_bit(self):
+        result, calls, sleeps, started = self.run_probe(["401 login"], ["204 2"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(self.START, result.stdout)
+        self.assertEqual(started["argv"], ["-c", "/etc/fluent-bit/fluent-bit.yaml"])
+        self.assertNotIn("tpot-waiting", started["files"])
+        self.assertEqual([call["header"] for call in calls], [None, "@" + str(self.probe / "tpot-probe.auth")])
+        self.assertNotIn("-H", calls[0]["argv"])
+        self.assertEqual(sleeps, [])
+
+    def test_an_old_hive_never_gets_the_login(self):
+        result, calls, sleeps, started = self.run_probe(["401"], ["204 2"], sleeps=2)
+        self.assertEqual(result.returncode, 143, result.stderr)
+        self.assertEqual(result.stderr.count(self.OLD), 2, result.stderr)
+        self.assertEqual(len(calls), 2)
+        for call in calls:
+            self.assertNotIn("-H", call["argv"])
+        self.assertEqual([sleep["seconds"] for sleep in sleeps], ["300", "300"])
+        self.assertIsNone(started)
+
+    def test_a_refused_login_waits_and_stays_healthy(self):
+        result, calls, sleeps, started = self.run_probe(["401 login"], ["401 login"])
+        self.assertEqual(result.returncode, 143, result.stderr)
+        self.assertIn(self.LOGIN, result.stderr)
+        self.assertEqual([sleep["seconds"] for sleep in sleeps], ["300"])
+        self.assertIn("tpot-waiting", sleeps[0]["files"])
+        self.assertTrue((self.probe / "tpot-waiting").exists())
+        self.assertEqual(len(calls), 2)
+        self.assertIsNone(started)
+        # the stop takes the login along
+        self.assertFalse((self.probe / "tpot-probe.auth").exists())
+
+    def test_a_pipeline_not_ready_waits(self):
+        result, _calls, sleeps, started = self.run_probe(["401 login"], ["503"])
+        self.assertEqual(result.returncode, 143, result.stderr)
+        self.assertIn(self.PIPELINE, result.stderr)
+        self.assertEqual([sleep["seconds"] for sleep in sleeps], ["300"])
+        self.assertIsNone(started)
+
+    def test_a_busy_hive_is_asked_again_soon(self):
+        for interval, low, high in (("300", 15, 45), ("5", 5, 5)):
+            with self.subTest(interval=interval):
+                for name in ("curl.jsonl", "sleep.jsonl", "fluent-bit.json"):
+                    (self.stub / name).unlink(missing_ok=True)
+                # round 1: 429 at stage 1, round 2: 429 at stage 2, round 3: the HIVE takes the format
+                result, calls, sleeps, started = self.run_probe(["429", "401 login"], ["429", "204 2"], sleeps=3,
+                                                                FLB_PROBE_INTERVAL=interval)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                waits = [int(found) for found in self.BUSY.findall(result.stderr)]
+                self.assertEqual(waits, [int(sleep["seconds"]) for sleep in sleeps])
+                self.assertEqual(len(waits), 2, result.stderr)
+                for wait in waits:
+                    self.assertGreaterEqual(wait, low)
+                    self.assertLessEqual(wait, high)
+                self.assertEqual([call["header"] is not None for call in calls], [False, False, True, False, True])
+                self.assertIn(self.START, result.stdout)
+                self.assertIsNotNone(started)
+
+    def test_any_other_answer_is_not_reachable(self):
+        for stage1, stage2, code, logins in ((["204 2"], ["204 2"], "204", 0), (["401 login"], ["500"], "500", 1)):
+            with self.subTest(stage1=stage1, stage2=stage2):
+                for name in ("curl.jsonl", "sleep.jsonl"):
+                    (self.stub / name).unlink(missing_ok=True)
+                result, calls, sleeps, started = self.run_probe(stage1, stage2)
+                self.assertEqual(result.returncode, 143, result.stderr)
+                self.assertIn(f"The HIVE is not reachable (HTTP {code}).", result.stderr)
+                self.assertEqual(sum(call["header"] is not None for call in calls), logins)
+                self.assertEqual([sleep["seconds"] for sleep in sleeps], ["300"])
+                self.assertIsNone(started)
+
+    def test_the_login_is_never_in_the_argv_and_gone_before_the_start(self):
+        result, calls, _sleeps, started = self.run_probe(["401 login"], ["204 2"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for call in calls:
+            self.assertFalse([arg for arg in call["argv"] if self.AUTH in arg], call["argv"])
+        self.assertEqual(calls[1]["auth"], f"Authorization: Basic {self.AUTH}\n")
+        self.assertEqual(oct(calls[1]["mode"]), oct(0o600))
+        self.assertNotIn("tpot-probe.auth", started["files"])
+        self.assertFalse((self.probe / "tpot-probe.auth").exists())
 
 
 @unittest.skipUnless(LUA, "needs lua or luajit on PATH (the smoke test runs the filter in Fluent Bit)")

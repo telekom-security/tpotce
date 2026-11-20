@@ -10,10 +10,16 @@ certificate of a test CA, every request recorded as one JSON line.
         Answers every request with the status given; --status-file is read on each request (an
         integer, a missing or unreadable file means --status). The record: time, method, path,
         headers (names in lowercase), status, gzip (Content-Encoding gzip) and body (the text,
-        gunzipped). The capability probe /tpot-ingest gets its own answer, --probe-file read on
-        each request: 204 (also a missing or unreadable file) with X-TPot-Ingest 2 as a HIVE that
-        takes the format, any other status without the marker (401 an old HIVE, 503 its Logstash
-        not ready); it is recorded too.
+        gunzipped). The capability probe /tpot-ingest gets the two-stage answer of nginx, by the
+        mode of --probe-file (read on each request) and whether it brings an Authorization header:
+          mode                  without Authorization   with Authorization
+          204 (also a missing   401 + login             204 + 2 (takes the format)
+          or unreadable file)
+          401 (an old HIVE)     401                     401
+          login (wrong login)   401 + login             401 + login
+          429 (busy)            429                     429
+          any other N           401 + login             N (503: its Logstash not ready)
+        (+ login / + 2: the header X-TPot-Ingest); it is recorded too, with the status it got.
 
 Standard library only (it runs with the python3 of the tpotinit image)."""
 
@@ -72,14 +78,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 pass
         return self.status
 
-    def probe_status(self):
+    def probe_mode(self):
         if self.probe_file:
             try:
                 with open(self.probe_file, encoding="utf-8") as handle:
-                    return int(handle.read().strip())
+                    text = handle.read().strip()
+                return text if text == "login" else int(text)
             except (OSError, ValueError):
                 pass
         return 204
+
+    def probe_answer(self):
+        """(status, X-TPot-Ingest or None) of the probe, as nginx answers it (lsweb.conf)."""
+        mode = self.probe_mode()
+        if mode in (401, 429):
+            return mode, None
+        if mode == "login" or "Authorization" not in self.headers:
+            return 401, "login"
+        if mode == 204:
+            return 204, "2"
+        return mode, None
 
     def read_body(self):
         if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
@@ -99,7 +117,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         compressed = self.headers.get("Content-Encoding", "").lower() == "gzip"
         body = gzip.decompress(raw) if compressed and raw else raw
         probe = self.path.split("?", 1)[0] == "/tpot-ingest"
-        status = self.probe_status() if probe else self.current_status()
+        status, mark = self.probe_answer() if probe else (self.current_status(), None)
         record = {"time": time.time(), "method": self.command, "path": self.path,
                   "headers": {key.lower(): value for key, value in self.headers.items()},
                   "status": status, "gzip": compressed, "body": body.decode("utf-8", "surrogateescape")}
@@ -108,9 +126,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             handle.write(line)
         if probe:
             self.send_response(status)
-            if status == 204:
-                self.send_header("X-TPot-Ingest", "2")
-            else:
+            if mark:
+                self.send_header("X-TPot-Ingest", mark)
+            if status != 204:
                 self.send_header("Content-Length", "0")
             self.end_headers()
             return

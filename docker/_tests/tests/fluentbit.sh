@@ -17,7 +17,7 @@ INIT_IMAGE=""
 # of a Debian docker) 120 s of load lost no line, 240 s only now and then; the files of Fluent Bit reach
 # the limit after about 240 s, so 360 s
 OUTAGE_SECONDS=360
-CASES="1,2,3,4,5,6,7,8,9,10,11,12,13"
+CASES="1,2,3,4,5,6,7,8,9,10,11,12,13,14"
 CASES_GIVEN=no
 # what tpotinit writes into elk_environment of a SENSOR, and the access of the sensor at the HIVE
 SMOKE_HOSTNAME="sensor-smoke"
@@ -40,10 +40,11 @@ Usage: $0 [options]
 
 Runs the Fluent Bit image of a SENSOR against a stub of the HIVE's ingest endpoint
 (docker/_tests/lib/hive_stub.py: HTTPS with a test CA, every request recorded,
-answers 200 or what its status file says; its capability probe /tpot-ingest 204
-with X-TPot-Ingest 2 or what its probe file says). The stub runs in the tpotinit image
-without a network, Fluent Bit shares its network namespace (127.0.0.1, and
-hive.test through the hosts file of the stub). Cases:
+answers 200 or what its status file says; its capability probe /tpot-ingest
+answers as nginx in two stages, 401 with X-TPot-Ingest login without the login,
+204 with X-TPot-Ingest 2 with it, or what its probe file says). The stub runs in
+the tpotinit image without a network, Fluent Bit shares its network namespace
+(127.0.0.1, and hive.test through the hosts file of the stub). Cases:
 
   1  Every fixture of tpotctl/checks/fixtures arrives once with the raw line in
      log, its type, the file it came from in t-pot_log_path, the t-pot_* fields
@@ -65,15 +66,19 @@ hive.test through the hosts file of the stub). Cases:
   9  uid 2000, a read-only root, healthy, the plugins tail, dummy, lua and
      http, and the entrypoint refuses an empty TPOT_HIVE_IP / TPOT_HIVE_USER
      or a wrong LS_SSL_VERIFICATION, FLB_PROBE_INTERVAL or FLB_STORAGE_LIMIT.
- 10  The HIVE answers 401 on /tpot-ingest (an old HIVE): no POST, the message
-     names it, the container stays healthy for 3 checks in a row.
- 11  Then 503 without the marker (its Logstash not ready), then 429 (a busy
-     HIVE): no POST, the messages name them.
- 12  Then 204 with X-TPot-Ingest 2 (FLB_PROBE_INTERVAL=5): every line written
-     before arrives within 15 s, once each.
+ 10  The HIVE answers 401 without the marker on /tpot-ingest (an old HIVE): no
+     POST, no probe brings the login, the message names it, the container stays
+     healthy for 3 checks in a row.
+ 11  Then 503 without the marker to the login (its Logstash not ready), then 429
+     (a busy HIVE): no POST, the messages name them.
+ 12  Then 204 with X-TPot-Ingest 2 to the login (FLB_PROBE_INTERVAL=5): Fluent
+     Bit starts, every line written before arrives within 15 s, once each.
  13  The HIVE stops answering (its stub paused) while 500 lines/s go into the
      log of every input for 360 s; 30 s after the load it answers again: every
      line arrives (duplicates allowed), the log has no "Too many open files".
+ 14  The HIVE answers 401 with X-TPot-Ingest login to the login as well (it does
+     not accept it): no POST, each round asks without the login, then with it,
+     the message names it, the container stays healthy for 3 checks in a row.
 
 Fluent Bit runs with the file limit (ulimits nofile) of compose/sensor.yml; where
 it has none, with soft 1024 / hard 524288, what a Debian docker gives a container
@@ -88,7 +93,7 @@ Options:
   --image IMAGE       Fluent Bit image to test. Defaults to docker/fluentbit/docker-compose.yml.
   --init-image IMAGE  Image the stub runs in (python3 with ssl, openssl). Defaults to
                       docker/tpotinit/docker-compose.yml.
-  --cases LIST        Only these cases (comma separated numbers 1-13). Default: all.
+  --cases LIST        Only these cases (comma separated numbers 1-14). Default: all.
   --timeout SEC       Time to wait for a delivery (at least 120 s are used; case 13
                       waits for the lines of its outage while Fluent Bit holds
                       chunks, at least 2100 s).
@@ -117,9 +122,9 @@ parse_args() {
     esac
   done
   local case
-  [[ "${CASES}" =~ ^[0-9]+(,[0-9]+)*$ ]] || test_die "--cases takes numbers 1-13, comma separated: ${CASES}"
+  [[ "${CASES}" =~ ^[0-9]+(,[0-9]+)*$ ]] || test_die "--cases takes numbers 1-14, comma separated: ${CASES}"
   for case in ${CASES//,/ }; do
-    (( 10#${case} >= 1 && 10#${case} <= 13 )) || test_die "--cases takes numbers 1-13, comma separated: ${CASES}"
+    (( 10#${case} >= 1 && 10#${case} <= 14 )) || test_die "--cases takes numbers 1-14, comma separated: ${CASES}"
   done
 }
 
@@ -405,17 +410,39 @@ def posts(run, count):
 
 
 def probes(run, status):
-    """Waits for a probe /tpot-ingest the stub answered with STATUS."""
+    """Waits until the last probe /tpot-ingest is one the stub answered with STATUS (the probes of a round
+    ask without the login, then with it: the answer of a round is that of its last probe)."""
     deadline = time.monotonic() + TIMEOUT
-    while not any(r["path"] == "/tpot-ingest" and r["status"] == int(status) for r in requests(run)):
+    while True:
+        found = [r for r in requests(run) if r["path"] == "/tpot-ingest"]
+        if found and found[-1]["status"] == int(status):
+            break
         if time.monotonic() > deadline:
-            fail(f"no probe answered {status} after {TIMEOUT} s")
+            fail(f"the last probe was not answered {status} after {TIMEOUT} s")
         time.sleep(0.5)
-    found = [r for r in requests(run) if r["path"] == "/tpot-ingest"]
     bad = [r for r in found if r["method"] != "GET" or r["body"]]
     if bad:
         fail(f"a probe is no GET without a body: {bad[0]}")
     print(f"{len(found)} probes so far")
+
+
+def logins(run, expected):
+    """never: no probe /tpot-ingest brought an Authorization header (an old HIVE never gets the login);
+    second: the probes of each round ask without it, then with Basic SMOKE_AUTH."""
+    sent = [r["headers"].get("authorization") for r in requests(run) if r["path"] == "/tpot-ingest"]
+    if expected == "never":
+        if any(sent):
+            fail(f"{sum(1 for value in sent if value)} of {len(sent)} probes brought the login")
+        print(f"none of {len(sent)} probes brought the login")
+        return
+    login = "Basic " + os.environ["SMOKE_AUTH"]
+    if len(sent) < 2:
+        fail(f"{len(sent)} probes, expected at least one round of two")
+    for index, value in enumerate(sent):
+        wanted = None if index % 2 == 0 else login
+        if value != wanted:
+            fail(f"probe {index + 1} of {len(sent)} brought {value!r}, expected {wanted!r}")
+    print(f"{len(sent) // 2} rounds: the first probe without the login, the second with it")
 
 
 def statuses(run, status):
@@ -564,7 +591,7 @@ def outage_count(run, manifest_path, timeout):
 COMMANDS = {"folders": folders, "prepare-fixtures": prepare_fixtures, "fixtures": case_fixtures, "heartbeats": case_heartbeats,
             "append": append, "expect": expect_tokens, "long": case_long, "invalid": case_invalid,
             "nothing": nothing, "status": statuses, "within": within, "posts": posts, "probes": probes,
-            "flood": flood, "outage-count": outage_count}
+            "logins": logins, "flood": flood, "outage-count": outage_count}
 COMMANDS[sys.argv[1]](*sys.argv[2:])
 PY
 }
@@ -822,16 +849,21 @@ run_image() {
     [[ "${rc}" -eq 1 ]] || test_die "The entrypoint takes ${setting} (rc ${rc}): ${out}"
     grep -F "${setting%%=*}" <<< "${out}" >/dev/null || test_die "The entrypoint does not name ${setting%%=*}: ${out}"
   done
-  # tpotinit takes TPOT_SENSOR_BUFFER_MB=0512: curl answers as a HIVE that takes the format, fluent-bit
-  # prints the limit it would get
+  # tpotinit takes TPOT_SENSOR_BUFFER_MB=0512: curl answers as a HIVE that takes the format (401 with
+  # X-TPot-Ingest login without the login, 204 with X-TPot-Ingest 2 with it), fluent-bit prints the limit
+  # it would get
   stub="${TEST_TMP_ROOT}/image-stub"
   mkdir -p "${stub}"
   cat > "${stub}/curl" <<'EOF'
 #!/bin/bash
+answer='HTTP/1.1 401 Unauthorized\r\nX-TPot-Ingest: login\r\n\r\n'
+headers=""
 while [ $# -gt 0 ]; do
-  [ "$1" = "-D" ] && printf 'HTTP/1.1 204 No Content\r\nX-TPot-Ingest: 2\r\n\r\n' > "$2"
+  [ "$1" = "-D" ] && headers="$2"
+  [ "$1" = "-H" ] && answer='HTTP/1.1 204 No Content\r\nX-TPot-Ingest: 2\r\n\r\n'
   shift
 done
+printf '%b' "${answer}" > "${headers}"
 EOF
   printf '#!/bin/bash\necho "limit=${FLB_STORAGE_LIMIT}"\n' > "${stub}/fluent-bit"
   chmod 0755 "${stub}" "${stub}/curl" "${stub}/fluent-bit"
@@ -854,18 +886,36 @@ healthy_streak() {
 }
 
 wait_for_log() {
-  # wait_for_log <text> <seconds>
+  # wait_for_log [-E] <text> <seconds>: -E takes the text as an extended regular expression
+  local mode="-F"
+  if [[ "$1" == "-E" ]]; then
+    mode="-E"
+    shift
+  fi
   local deadline=$((SECONDS + $2))
-  until flb_logs | grep -F -- "$1" >/dev/null; do
+  until flb_logs | grep "${mode}" -- "$1" >/dev/null; do
     (( SECONDS < deadline )) || test_die "Fluent Bit did not log within $2 s: $1"
     sleep 1
   done
 }
 
-# Run probe (E2): a HIVE that does not take the format (401), then its Logstash not ready (503 without
-# the marker), then a busy one (429), then one that takes it; Fluent Bit reads and sends nothing until then
+# wait_healthy <case>: Fluent Bit waits for the HIVE and stays healthy for 3 checks in a row
+wait_healthy() {
+  local deadline=$((SECONDS + 60))
+  until [[ "$(healthy_streak)" -ge 3 ]]; do
+    (( SECONDS < deadline )) || test_die "$1 Fluent Bit was not healthy for 3 checks in a row while it waits: $(docker inspect -f '{{json .State.Health}}' "${TEST_CONTAINER_NAME}")"
+    sleep 1
+  done
+  [[ "$(docker inspect -f '{{.State.Health.Status}}' "${TEST_CONTAINER_NAME}")" == "healthy" ]] \
+    || test_die "$1 Fluent Bit is not healthy while it waits"
+}
+
+# Run probe (E2, I1): an old HIVE (401 without the marker, it never gets the login), then its Logstash not
+# ready (503 without the marker to the login), then a busy one (429), then one that takes the format (401
+# with X-TPot-Ingest login, then 204 with X-TPot-Ingest 2 to the login); Fluent Bit reads and sends nothing
+# until then
 run_probe() {
-  local data n deadline
+  local data n
   local tokens=()
   prepare_run probe
   data="${RUN_DIR}/data"
@@ -877,15 +927,10 @@ run_probe() {
   wait_for_log "The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here." 30
   checker append "${data}/cowrie/log/cowrie.json" lines waiting-cowrie 5
   if wanted 10; then
-    deadline=$((SECONDS + 60))
-    until [[ "$(healthy_streak)" -ge 3 ]]; do
-      (( SECONDS < deadline )) || test_die "Fluent Bit was not healthy for 3 checks in a row while it waits: $(docker inspect -f '{{json .State.Health}}' "${TEST_CONTAINER_NAME}")"
-      sleep 1
-    done
-    [[ "$(docker inspect -f '{{.State.Health.Status}}' "${TEST_CONTAINER_NAME}")" == "healthy" ]] \
-      || test_die "Fluent Bit is not healthy while it waits"
+    wait_healthy 10
     checker posts "${RUN_DIR}" 0
-    test_ok "10 401 on /tpot-ingest: no POST, healthy for $(healthy_streak) checks in a row, the message names it"
+    checker logins "${RUN_DIR}" never
+    test_ok "10 401 without the marker on /tpot-ingest (an old HIVE): no POST, no probe with the login, healthy for $(healthy_streak) checks in a row, the message names it"
   fi
   echo 503 > "${RUN_DIR}/stub/probe"
   checker probes "${RUN_DIR}" 503
@@ -895,22 +940,39 @@ run_probe() {
   # C4: a HIVE that limits the probes of all its SENSORs together answers 429
   echo 429 > "${RUN_DIR}/stub/probe"
   checker probes "${RUN_DIR}" 429
-  wait_for_log "The HIVE is busy (HTTP 429), next probe in 5 s." 30
+  wait_for_log -E "The HIVE is busy \(HTTP 429\), next probe in [0-9]+ s\." 30
   checker posts "${RUN_DIR}" 0
   if wanted 11; then
-    test_ok "11 503 without the marker and 429: no POST, the messages name them"
+    test_ok "11 503 without the marker to the login and 429: no POST, the messages name them"
   fi
   echo 204 > "${RUN_DIR}/stub/probe"
   for n in $(seq -f '%05g' 0 4); do
     tokens+=("held-cowrie-${n}" "held-dionaea-${n}" "waiting-cowrie-${n}" "waiting-dionaea-${n}")
   done
+  wait_for_log "The HIVE takes this SENSOR's format; Fluent Bit starts." 60
   checker within "${RUN_DIR}" 15 "${tokens[@]}"
   if wanted 12; then
-    test_ok "12 204 with X-TPot-Ingest 2: all ${#tokens[@]} lines written before arrive within 15 s, once each"
+    test_ok "12 204 with X-TPot-Ingest 2 to the login: Fluent Bit starts, all ${#tokens[@]} lines written before arrive within 15 s, once each"
   fi
   if flb_logs | grep -E "\[ *(error|warn)\]" >&2; then
     test_die "Fluent Bit logged errors or warnings (above)"
   fi
+  stop_run
+}
+
+# Run login (I1): a HIVE of this release that does not accept the SENSOR's login (401 with X-TPot-Ingest
+# login to it as well): each round asks without the login, then with it; nothing is sent, the container
+# stays healthy
+run_login() {
+  prepare_run login
+  echo login > "${RUN_DIR}/stub/probe"
+  checker append "${RUN_DIR}/data/cowrie/log/cowrie.json" lines login-cowrie 5
+  HEALTH_INTERVAL=2s start_run hive FLB_PROBE_INTERVAL=5
+  wait_for_log "The HIVE does not accept this SENSOR's login (TPOT_HIVE_USER); tpot sensors list on the HIVE shows its access; logs wait here." 30
+  wait_healthy 14
+  checker posts "${RUN_DIR}" 0
+  checker logins "${RUN_DIR}" second
+  test_ok "14 a refused login (401 with X-TPot-Ingest login to it): no POST, the login only in the second probe of a round, healthy for $(healthy_streak) checks in a row, the message names it"
   stop_run
 }
 
@@ -993,6 +1055,7 @@ main() {
   if wanted 7; then run_limit; fi
   if wanted 8; then run_tls; fi
   if wanted 10 || wanted 11 || wanted 12; then run_probe; fi
+  if wanted 14; then run_login; fi
   if wanted 9; then run_image; fi
   if wanted 13; then run_outage; fi
   test_ok "fluentbit smoke test passed (cases ${CASES})"
