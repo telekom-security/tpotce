@@ -13,7 +13,7 @@ import sys
 import tempfile
 import unittest
 import urllib.error
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
@@ -37,6 +37,55 @@ OPENSSL_TEXT = """        X509v3 extensions:
             X509v3 Subject Alternative Name:
                 IP Address:192.168.5.15, DNS:hive.example.org
 """
+# what cert_info asks openssl x509 for an RSA certificate of tpotinit of an earlier release
+RSA_TEXT = """issuer=O=Internet Widgits Pty Ltd,ST=Some-State,C=AU
+notAfter=Nov  7 22:19:59 2036 GMT
+Certificate:
+    Data:
+        Signature Algorithm: sha512WithRSAEncryption
+        Issuer: O=Internet Widgits Pty Ltd,ST=Some-State,C=AU
+        Subject: O=Internet Widgits Pty Ltd,ST=Some-State,C=AU
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                Public-Key: (2048 bit)
+                Modulus:
+                    00:c4:5e
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Subject Alternative Name:
+                IP Address:192.168.5.15, DNS:hive.example.org
+    Signature Algorithm: sha512WithRSAEncryption
+"""
+SELF_SIGNED = "O=Internet Widgits Pty Ltd,ST=Some-State,C=AU"
+RENEW = "tpot sensors cert --renew --distribute"
+
+
+def cert(sans, self_signed=True, key="ECDSA P-384", days=3650, issuer="Example Root CA", now=None):
+    """A CertInfo of nginx.crt that ends `days` (and an hour) after now."""
+    now = now or datetime.now(timezone.utc)
+    return sensors.CertInfo(key=key, self_signed=self_signed, issuer=SELF_SIGNED if self_signed else issuer,
+                            not_after=now + timedelta(days=days, hours=1), sans=list(sans))
+
+
+def fake_openssl(text, verify=0):
+    """openssl for cert_info: x509 prints `text`, the first certificate goes to -out, verify ends with `verify`."""
+    calls = []
+
+    def run(command, **_kwargs):
+        calls.append(command)
+        if command[1] == "x509" and "-out" in command:
+            with open(command[command.index("-out") + 1], "w") as handle:
+                handle.write("first\n")
+            return mock.Mock(returncode=0, stdout="", stderr="")
+        if command[1] == "x509":
+            return mock.Mock(returncode=0, stdout=text, stderr="")
+        return mock.Mock(returncode=verify, stdout="", stderr="error 20 at 0 depth lookup" if verify else "")
+    return run, calls
+
+
+def flat(text):
+    """The output without the line breaks of Rich."""
+    return " ".join(text.split())
 
 
 def openssl_3() -> bool:
@@ -266,6 +315,195 @@ class HelpersTest(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(conf, "ssl")))
         with open(os.path.join(REPO_DIR, "docker", "nginx", "Dockerfile")) as handle:
             self.assertNotIn("ssl", handle.read())
+
+
+class CertificateTest(unittest.TestCase):
+    """The certificate of the HIVE as the T-Pot Manager reads and shows it."""
+
+    NOW = datetime(2026, 11, 20, 12, 0, tzinfo=timezone.utc)
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = tmp.name
+
+    def openssl(self, *command):
+        subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, cwd=self.tmp)
+
+    @unittest.skipUnless(openssl_3(), "needs OpenSSL 3 or later")
+    def test_cert_info_of_an_ecdsa_self_signed_certificate(self):
+        key, crt = os.path.join(self.tmp, "nginx.key"), os.path.join(self.tmp, "nginx.crt")
+        self.openssl(*sensors.renew_command(["IP:10.1.2.3", "DNS:hive.test"], key, crt))
+        info = sensors.cert_info(crt)
+        self.assertEqual(info.key, "ECDSA P-384")
+        self.assertTrue(info.self_signed)
+        self.assertEqual(info.issuer, SELF_SIGNED)                  # no CN: its RFC 2253 name
+        self.assertEqual(info.sans, ["IP:10.1.2.3", "DNS:hive.test"])
+        self.assertEqual(info.not_after.utcoffset(), timedelta(0))
+        self.assertLessEqual(abs(sensors.days_left(info, datetime.now(timezone.utc)) - 3650), 1)
+        self.assertFalse(sensors.suggests_ecdsa(info))
+
+    @unittest.skipUnless(openssl_3(), "needs OpenSSL 3 or later")
+    def test_cert_info_of_a_ca_certificate(self):
+        # a root of an own CA signs the leaf, nginx.crt holds the leaf and the root after it
+        self.openssl("openssl", "req", "-nodes", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256",
+                     "-keyout", "root.key", "-out", "root.crt", "-days", "30", "-subj",
+                     "/O=Example, Inc./CN=Example Root CA")
+        self.openssl("openssl", "req", "-nodes", "-new", "-newkey", "rsa:2048", "-keyout", "nginx.key",
+                     "-out", "leaf.csr", "-subj", "/CN=hive.example.org")
+        with open(os.path.join(self.tmp, "ext.cnf"), "w") as handle:
+            handle.write("subjectAltName = IP:192.168.5.15, DNS:hive.example.org\n")
+        self.openssl("openssl", "x509", "-req", "-in", "leaf.csr", "-CA", "root.crt", "-CAkey", "root.key",
+                     "-CAcreateserial", "-out", "leaf.crt", "-days", "20", "-extfile", "ext.cnf")
+        crt = os.path.join(self.tmp, "nginx.crt")
+        with open(crt, "w") as out:
+            for name in ("leaf.crt", "root.crt"):
+                with open(os.path.join(self.tmp, name)) as handle:
+                    out.write(handle.read())
+        info = sensors.cert_info(crt)
+        self.assertFalse(info.self_signed)                          # the root after it does not count
+        self.assertEqual(info.issuer, "Example Root CA")
+        self.assertEqual(info.key, "RSA 2048")
+        self.assertEqual(info.sans, ["IP:192.168.5.15", "DNS:hive.example.org"])
+        self.assertIn(sensors.days_left(info, datetime.now(timezone.utc)), (19, 20))
+        self.assertFalse(sensors.suggests_ecdsa(info))              # a CA's RSA is not T-Pot's to change
+        self.assertTrue(sensors.cert_info(os.path.join(self.tmp, "root.crt")).self_signed)
+
+    def test_cert_info_of_an_rsa_certificate(self):
+        crt = os.path.join(self.tmp, "nginx.crt")
+        with open(crt, "w") as handle:
+            handle.write("a certificate\n")
+        run, calls = fake_openssl(RSA_TEXT)
+        info = sensors.cert_info(crt, run=run)
+        self.assertEqual(info, sensors.CertInfo(key="RSA 2048", self_signed=True, issuer=SELF_SIGNED,
+                                                not_after=datetime(2036, 11, 7, 22, 19, 59, tzinfo=timezone.utc),
+                                                sans=["IP:192.168.5.15", "DNS:hive.example.org"]))
+        self.assertTrue(sensors.suggests_ecdsa(info))
+        self.assertEqual(sensors.cert_sans(crt, run=run), ["IP:192.168.5.15", "DNS:hive.example.org"])
+        # the first certificate alone, as the SENSOR checks it: never the whole file, never a partial chain
+        verify = calls[2]
+        first = verify[-1]
+        self.assertEqual(verify, ["openssl", "verify", "-no-CApath", "-no-CAstore", "-no_check_time",
+                                  "-CAfile", first, first])
+        self.assertNotEqual(first, crt)
+        self.assertEqual(calls[1], ["openssl", "x509", "-in", crt, "-out", first])
+        self.assertFalse(os.path.exists(first))                     # its temporary copy is gone
+        run, _calls = fake_openssl(RSA_TEXT, verify=2)              # verification failed: issued by a CA
+        info = sensors.cert_info(crt, run=run)
+        self.assertFalse(info.self_signed)
+        self.assertFalse(sensors.suggests_ecdsa(info))
+
+    def test_cert_info_none_for_a_missing_or_empty_file(self):
+        never = mock.Mock(side_effect=AssertionError("openssl is not asked"))
+        crt = os.path.join(self.tmp, "nginx.crt")
+        self.assertIsNone(sensors.cert_info(crt, run=never))
+        self.assertEqual(sensors.cert_sans(crt, run=never), [])
+        open(crt, "w").close()
+        self.assertIsNone(sensors.cert_info(crt, run=never))
+        self.assertEqual(sensors.cert_sans(crt, run=never), [])
+
+    def test_cert_info_raises_for_garbage(self):
+        crt = os.path.join(self.tmp, "nginx.crt")
+        with open(crt, "w") as handle:
+            handle.write("old nginx.crt\n")
+        failing = mock.Mock(return_value=mock.Mock(returncode=1, stdout="",
+                                                   stderr="Could not find or decode certificate\nmore\n"))
+        with self.assertRaisesRegex(sensors.SensorsError, "Could not find or decode certificate$"):
+            sensors.cert_info(crt, run=failing)
+        for text in (RSA_TEXT.replace("notAfter=Nov  7 22:19:59 2036 GMT", "notAfter=soon"),
+                     RSA_TEXT.replace("notAfter=", "nothing=")):
+            with self.subTest(text=text[:60]), self.assertRaises(sensors.SensorsError):
+                sensors.cert_info(crt, run=fake_openssl(text)[0])
+        with self.assertRaises(sensors.SensorsError):               # verify itself could not run
+            sensors.cert_info(crt, run=fake_openssl(RSA_TEXT, verify=1)[0])
+        with self.assertRaises(sensors.SensorsError):
+            sensors.cert_info(crt, run=mock.Mock(side_effect=FileNotFoundError("openssl")))
+        if shutil.which("openssl"):                                 # any openssl, LibreSSL too
+            with self.assertRaises(sensors.SensorsError):
+                sensors.cert_info(crt)
+        os.unlink(crt)
+        os.symlink(os.path.join(self.tmp, "gone.crt"), crt)        # a link to nothing is no missing file
+        with self.assertRaises(sensors.SensorsError):
+            sensors.cert_info(crt, run=mock.Mock(side_effect=AssertionError("openssl is not asked")))
+        os.unlink(crt)
+        os.mkdir(crt)                                               # nor is a folder, even an empty one
+        with self.assertRaisesRegex(sensors.SensorsError, "it is no file"):
+            sensors.cert_info(crt, run=mock.Mock(side_effect=AssertionError("openssl is not asked")))
+
+    def test_cert_summary_lines(self):
+        sans = ["IP:192.168.5.15", "DNS:hive.example.org"]
+
+        def info(days, self_signed=True, key="ECDSA P-384"):
+            return sensors.CertInfo(key=key, self_signed=self_signed,
+                                    issuer=SELF_SIGNED if self_signed else "Example Root CA",
+                                    not_after=self.NOW + timedelta(days=days), sans=sans)
+
+        covers = "covers IP:192.168.5.15, DNS:hive.example.org"
+        self.assertEqual(sensors.cert_summary(info(3650), self.NOW, RENEW), [
+            ("info", f"Certificate: ECDSA P-384, self-signed, valid until 2036-11-17, {covers}")])
+        self.assertEqual(sensors.cert_summary(info(29), self.NOW, RENEW)[1:], [
+            ("warn", f"The certificate expires in 29 days (2026-12-19); renew it: {RENEW}.")])
+        self.assertEqual(len(sensors.cert_summary(info(30), self.NOW, RENEW)), 1)
+        self.assertEqual(sensors.cert_summary(info(-1), self.NOW, RENEW)[1:], [
+            ("warn", f"The certificate expired on 2026-11-19; renew it: {RENEW}.")])
+        self.assertEqual(sensors.cert_summary(info(10, self_signed=False), self.NOW, RENEW), [
+            ("info", f"Certificate: ECDSA P-384, issued by Example Root CA, valid until 2026-11-30, {covers}"),
+            ("warn", "The certificate expires in 10 days (2026-11-30); renew it at Example Root CA, "
+                     "then tpot sensors cert --distribute.")])
+        page = "Renew certificate below"
+        self.assertEqual(sensors.cert_summary(info(10, key="RSA 8192"), self.NOW, page), [
+            ("info", f"Certificate: RSA 8192, self-signed, valid until 2026-11-30, {covers}"),
+            ("warn", f"The certificate expires in 10 days (2026-11-30); renew it: {page}."),
+            ("hint", f"An ECDSA certificate costs this HIVE far less CPU per connection than RSA: {page}.")])
+        self.assertEqual([level for level, _text in sensors.cert_summary(
+            info(3650, self_signed=False, key="RSA 4096"), self.NOW, RENEW)], ["info"])
+        self.assertEqual(sensors.cert_summary(None, self.NOW, RENEW, path="/data/nginx/cert/nginx.crt"), [
+            ("warn", "Certificate: none (/data/nginx/cert/nginx.crt is missing or empty); "
+                     "tpot sensors cert --renew issues one.")])
+        self.assertTrue(sensors.cert_summary(None, self.NOW, RENEW)[0][1].startswith("Certificate: none ("))
+        self.assertEqual(sensors.days_left(info(0), self.NOW + timedelta(seconds=1)), -1)
+        self.assertEqual(sensors.ca_renew_refusal(info(10, self_signed=False), "/data/nginx/cert"),
+                         "The certificate of this HIVE is issued by Example Root CA; T-Pot does not replace it. "
+                         "Renew it at that CA, or move nginx.crt and nginx.key (/data/nginx/cert) aside, then "
+                         "tpot sensors cert --renew issues a self-signed one (--add names its addresses).")
+
+    def test_nginx_reload(self):
+        from tpotctl import ops
+        calls = []
+
+        def docker(*answers):
+            def run(command, **_kwargs):
+                calls.append(command)
+                code, out, err = answers[len(calls) - 1]
+                return mock.Mock(returncode=code, stdout=out, stderr=err)
+            return run
+
+        with mock.patch.object(ops, "linux_host", return_value=False):
+            self.assertEqual(ops.nginx_reload(run=docker()), "not running")
+        with mock.patch.object(ops, "linux_host", return_value=True), \
+                mock.patch.object(ops.shutil, "which", return_value=None):
+            self.assertEqual(ops.nginx_reload(run=docker()), "not running")
+        self.assertEqual(calls, [])
+        inspect = ["docker", "inspect", "-f", "{{.State.Running}}", "nginx"]
+        test = ["docker", "exec", "nginx", "nginx", "-t", "-q"]
+        hup = ["docker", "kill", "--signal", "HUP", "nginx"]
+        with mock.patch.object(ops, "linux_host", return_value=True), \
+                mock.patch.object(ops.shutil, "which", return_value="/usr/bin/docker"):
+            for answer in ((1, "", "Error: No such object: nginx"), (0, "false\n", "")):
+                calls.clear()
+                self.assertEqual(ops.nginx_reload(run=docker(answer)), "not running")
+                self.assertEqual(calls, [inspect])
+            calls.clear()
+            emerg = 'nginx: [emerg] cannot load certificate "/etc/nginx/cert/nginx.crt"'
+            refused = (1, "", emerg + "\nnginx: configuration file test failed")
+            with self.assertRaises(ops.OpsError) as caught:
+                ops.nginx_reload(run=docker((0, "true\n", ""), refused))
+            self.assertEqual(str(caught.exception), emerg)          # its first line, for M-reload-fail
+            self.assertEqual(calls, [inspect, test])                 # no HUP for a configuration nginx refuses
+            calls.clear()
+            self.assertEqual(ops.nginx_reload(run=docker((0, "true\n", ""), (0, "", ""), (0, "nginx\n", ""))),
+                             "reloaded")
+            self.assertEqual(calls, [inspect, test, hup])
 
 
 class HeartbeatTest(unittest.TestCase):
@@ -1335,7 +1573,7 @@ class CliTest(unittest.TestCase):
         registry = sensors.Registry(self.repo)
         registry.record(sensors.Sensor("sensor-new-fox", host="10.0.0.5", ssh_user="debian", source="deployed"))
         popen, children = fake_popen(0)
-        with mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.5.15"]), \
+        with mock.patch.object(sensors, "cert_info", return_value=cert(["IP:192.168.5.15"])), \
                 mock.patch("subprocess.Popen", side_effect=popen):
             code, text = self.run_cli("sensors", "cert", "--distribute")
         self.assertIn("skipped", text)                                        # migrated ones have no host
@@ -1347,7 +1585,7 @@ class CliTest(unittest.TestCase):
         registry.grant("sensor-new-fox", "pw")
         registry.record(sensors.Sensor("sensor-new-fox", host="10.0.0.5", ssh_user="debian", source="deployed"))
         popen, children = fake_popen(KeyboardInterrupt, -2)
-        with mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.5.15"]), \
+        with mock.patch.object(sensors, "cert_info", return_value=cert(["IP:192.168.5.15"])), \
                 mock.patch("subprocess.Popen", side_effect=popen):
             code, text = self.run_cli("sensors", "cert", "--distribute", "sensor-new-fox", stdin=TTY())
         self.assertEqual(children[0].args[0], "ansible-playbook")
@@ -1355,6 +1593,121 @@ class CliTest(unittest.TestCase):
         self.assertNotIn("Traceback", text)
         inventory = children[0].args[children[0].args.index("-i") + 1]
         self.assertFalse(os.path.exists(inventory))                           # the inventory goes as well
+
+    def cert_cli(self, *args, info=None, reload="reloaded", stdin=None, error=None):
+        """tpot sensors cert ... with nginx.crt as `info`; the renew steps in their order."""
+        from tpotctl import ops
+        steps = []
+
+        def renewed(_registry, sans):
+            steps.append(("renew", sans))
+            return "20261120-120000"
+
+        def reloaded():
+            steps.append("reload")
+            if isinstance(reload, Exception):
+                raise reload
+            return reload
+
+        cert_info = mock.Mock(side_effect=error) if error else mock.Mock(return_value=info)
+        with mock.patch.object(sensors, "cert_info", cert_info), \
+                mock.patch.object(sensors, "renew_cert", side_effect=renewed), \
+                mock.patch.object(ops, "nginx_reload", side_effect=reloaded), \
+                mock.patch.object(ops, "service_command", side_effect=AssertionError("T-Pot is not restarted")):
+            code, text = self.run_cli("sensors", "cert", *args, stdin=stdin)
+        return code, text, steps
+
+    def test_cert_shows_the_certificate(self):
+        code, text, steps = self.cert_cli("--add", "10.9.8.7", info=cert(["IP:192.168.5.15"], key="RSA 8192"))
+        self.assertEqual(code, 0, text)
+        self.assertEqual(steps, [])
+        until = (datetime.now(timezone.utc) + timedelta(days=3650, hours=1)).strftime("%Y-%m-%d")
+        self.assertIn(f"Certificate: RSA 8192, self-signed, valid until {until}, covers IP:192.168.5.15", flat(text))
+        self.assertIn(f"An ECDSA certificate costs this HIVE far less CPU per connection than RSA: {RENEW}.",
+                      flat(text))
+        self.assertIn("Not covered: 10.9.8.7 - sensors checking with full verification cannot connect there.",
+                      flat(text))
+        self.assertNotIn("expires", text)
+        code, text, _steps = self.cert_cli(info=cert(["IP:192.168.5.15"], self_signed=False, days=5))
+        self.assertEqual(code, 0, text)
+        self.assertIn("issued by Example Root CA", flat(text))
+        self.assertIn("days (", flat(text))
+        self.assertIn("renew it at Example Root CA, then tpot sensors cert --distribute.", flat(text))
+        self.assertNotIn("ECDSA certificate costs", flat(text))
+        code, text, _steps = self.cert_cli(info=None)
+        self.assertEqual(code, 0, text)
+        self.assertIn("Certificate: none (", flat(text))
+        self.assertIn("is missing or empty); tpot sensors cert --renew issues one.", flat(text))
+
+    def test_renew_refuses_a_ca_certificate(self):
+        code, text, steps = self.cert_cli("--renew", "--yes", info=cert(["IP:192.168.5.15"], self_signed=False))
+        self.assertEqual(code, 2, text)
+        self.assertEqual(steps, [])
+        folder = os.path.join(self.repo, "data", "nginx", "cert")
+        self.assertIn(f"The certificate of this HIVE is issued by Example Root CA; T-Pot does not replace it. "
+                      f"Renew it at that CA, or move nginx.crt and nginx.key ({folder}) aside, then tpot sensors "
+                      f"cert --renew issues a self-signed one (--add names its addresses).", flat(text))
+
+    def test_renew_reloads_nginx(self):
+        from tpotctl import ops
+        question = ("Issue the certificate of this HIVE anew (ECDSA P-384)? Browsers warn about it once more, "
+                    "every sensor needs the new one (sensors without access are skipped).")
+        old = cert(["IP:192.168.5.15"], key="RSA 8192")
+        code, text, steps = self.cert_cli("--renew", info=old, stdin=TTY("y\n"))
+        self.assertEqual(code, 0, text)
+        self.assertIn(question, flat(text))
+        self.assertEqual(steps, [("renew", ["IP:192.168.5.15"]), "reload"])
+        self.assertIn("nginx uses the new certificate.", text)
+        self.assertNotIn("8192 bit key", text)
+        code, text, steps = self.cert_cli("--renew", info=old, stdin=TTY("n\n"))
+        self.assertEqual(code, 1, text)
+        self.assertEqual(steps, [])                                           # declined: nothing issued
+        code, text, steps = self.cert_cli("--renew", "--yes", info=old, reload="not running")
+        self.assertEqual(code, 0, text)
+        self.assertEqual(steps[1:], ["reload"])
+        self.assertIn("nginx is not running, T-Pot uses the new certificate from its next start on.", flat(text))
+        code, text, steps = self.cert_cli("--renew", "--yes", info=old,
+                                          reload=ops.OpsError('nginx: [emerg] cannot load certificate'))
+        self.assertEqual(code, 1, text)
+        self.assertIn("nginx does not take the new certificate (nginx: [emerg] cannot load certificate); the old "
+                      "ones are kept as nginx.crt.bak-20261120-120000 and nginx.key.bak-20261120-120000, put them "
+                      "back before T-Pot is restarted.", flat(text))
+        code, text, steps = self.cert_cli("--renew", "--yes", "--no-restart", info=old)
+        self.assertEqual(code, 0, text)
+        self.assertEqual(steps, [("renew", ["IP:192.168.5.15"])])             # no reload
+        self.assertIn("nginx uses the new certificate from the next start of T-Pot on (tpot restart).", flat(text))
+
+    def test_renew_without_a_certificate_issues_one(self):
+        registry = sensors.Registry(self.repo)
+        registry.record(sensors.Sensor("sensor-new-fox", host="10.0.0.5", ssh_user="debian",
+                                       hive_address="192.168.1.2", source="deployed"))
+        code, text, steps = self.cert_cli("--renew", "--yes", "--add", "hive.example.org", info=None)
+        self.assertEqual(code, 0, text)
+        self.assertEqual(steps, [("renew", ["IP:192.168.1.2", "DNS:hive.example.org"]), "reload"])
+        self.assertIn("Certificate: none (", flat(text))
+        with mock.patch.object(self.Registry, "hive_addresses", return_value=[]):
+            code, text, steps = self.cert_cli("--renew", "--yes", info=None)
+        self.assertEqual(code, 2, text)
+        self.assertEqual(steps, [])
+        self.assertIn("give one with --add", flat(text))
+
+    def test_renew_refuses_a_certificate_it_cannot_read(self):
+        crt = os.path.join(self.repo, "data", "nginx", "cert", "nginx.crt")
+        with open(crt, "rb") as handle:
+            before = handle.read()
+        code, text, steps = self.cert_cli("--renew", "--yes", error=sensors.SensorsError(
+            f"cannot read the certificate {crt}: Could not find or decode certificate"))
+        self.assertEqual(code, 1, text)
+        self.assertEqual(steps, [])
+        self.assertIn("cannot read the certificate", text)
+        self.assertNotIn("Traceback", text)
+        if shutil.which("openssl"):                       # the garbage nginx.crt of the checkout, read for real
+            with mock.patch.object(sensors, "renew_cert", side_effect=AssertionError("not replaced")):
+                code, text = self.run_cli("sensors", "cert", "--renew", "--yes")
+            self.assertEqual(code, 1, text)
+            self.assertIn("cannot read the certificate", flat(text))
+        with open(crt, "rb") as handle:
+            self.assertEqual(handle.read(), before)
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")

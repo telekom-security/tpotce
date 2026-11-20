@@ -193,7 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
     cert.add_argument("--distribute", nargs="*", metavar="NAME",
                       help="copy it to these registered sensors (all if no NAME) and restart their Fluent Bit "
                            "(Logstash on an older SENSOR)")
-    cert.add_argument("--no-restart", action="store_true", help="do not restart T-Pot after --renew")
+    cert.add_argument("--no-restart", action="store_true", help="do not reload nginx after --renew")
     cert.add_argument("--no-become-pass", action="store_true", help="sudo on the sensors needs no password")
     cert.add_argument("-y", "--yes", action="store_true", help="do not ask")
     importing = sensor_actions.add_parser("import", help="give the sensors of lswebpasswd and lswebpasswd.lost "
@@ -1661,20 +1661,35 @@ def run_sudo(args, registry=None) -> int:
     return int(failed)
 
 
-def renew_certificate(registry, addresses, console, yes: bool, restart: bool) -> bool:
+CERT_RENEW = "tpot sensors cert --renew --distribute"
+
+
+def renew_certificate(registry, addresses, console, yes: bool, reload: bool) -> str:
+    """Issues the certificate of this HIVE anew for its addresses and `addresses`; only for a self-signed or
+    a missing one (the callers check). "" declined or failed, else "reloaded", "not running" (nginx takes it
+    at the next start) or "not reloaded" (without `reload`, the caller says when nginx takes it)."""
     from tpotctl import sensors as tsensors
     current = tsensors.cert_sans(registry.cert)
     sans = list(dict.fromkeys(current + [tsensors.san_of(a) for a in addresses]))
     console.print(f"The new certificate covers: {', '.join(sans)}")
-    if not confirm("Issue the certificate of this HIVE anew? Every sensor needs the new one afterwards "
-                   "(tpot sensors cert --distribute).", yes):
-        return False
-    console.print("Creating a 8192 bit key, this can take a minute ...")
+    if not confirm("Issue the certificate of this HIVE anew (ECDSA P-384)? Browsers warn about it once more, "
+                   "every sensor needs the new one (sensors without access are skipped).", yes):
+        return ""
     stamp = tsensors.renew_cert(registry, sans)
     say.ok(f"New certificate, the old one is kept as nginx.crt.bak-{stamp}.", console.file)
-    if restart and linux_host_ok() and confirm("Restart T-Pot now, so that nginx uses it?", yes):
-        call(ops.service_command("restart"))
-    return True
+    if not reload:
+        return "not reloaded"
+    try:
+        state = ops.nginx_reload()
+    except ops.OpsError as err:
+        error(f"nginx does not take the new certificate ({err}); the old ones are kept as nginx.crt.bak-{stamp} "
+              f"and nginx.key.bak-{stamp}, put them back before T-Pot is restarted.")
+        return ""
+    if state == "reloaded":
+        say.ok("nginx uses the new certificate.", console.file)
+    else:
+        say.warn("nginx is not running, T-Pot uses the new certificate from its next start on.", console.file)
+    return state
 
 
 def linux_host_ok() -> bool:
@@ -1682,18 +1697,31 @@ def linux_host_ok() -> bool:
 
 
 def run_sensor_cert(args, registry, console) -> int:
+    from datetime import datetime, timezone
     from rich.text import Text
     from tpotctl import sensors as tsensors
-    sans = tsensors.cert_sans(registry.cert)
-    console.print(f"The certificate of this HIVE covers: {', '.join(sans) or 'nothing'}")
+    # a certificate that cannot be read ends the command (SensorsError, exit 1): it is never "none"
+    info = tsensors.cert_info(registry.cert)
+    for level, line in tsensors.cert_summary(info, datetime.now(timezone.utc), CERT_RENEW, path=registry.cert):
+        console.print(Text(line, style={"warn": "yellow", "hint": "dim"}.get(level, "")))
+    sans = info.sans if info else []
     missing = [a for a in registry.hive_addresses() + args.add if not tsensors.covers(a, sans)]
-    if missing:
+    if info and missing:
         console.print(Text(f"Not covered: {', '.join(missing)} - sensors checking with full verification "
                            f"cannot connect there.", style="yellow"))
     if args.renew:
-        if not renew_certificate(registry, registry.hive_addresses() + args.add, console, args.yes,
-                                 not args.no_restart):
+        if info and not info.self_signed:
+            error(tsensors.ca_renew_refusal(info, os.path.dirname(registry.cert)))
+            return 2
+        addresses = registry.hive_addresses() + args.add
+        if not sans and not addresses:
+            error("the new certificate would cover no address of this HIVE, give one with --add")
+            return 2
+        state = renew_certificate(registry, addresses, console, args.yes, not args.no_restart)
+        if not state:
             return 1
+        if state == "not reloaded":
+            say.warn("nginx uses the new certificate from the next start of T-Pot on (tpot restart).", console.file)
     if args.distribute is not None:
         chosen = [registry.get(n) for n in args.distribute] if args.distribute else registry.sensors()
         reachable = [s for s in chosen if s.host and s.ssh_user and s.access]

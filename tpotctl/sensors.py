@@ -28,6 +28,7 @@ import os
 import re
 import secrets
 import socket
+import ssl
 import string
 import subprocess
 import tempfile
@@ -36,7 +37,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from stat import S_ISREG
 from typing import Callable, Dict, Iterable, Iterator, List, Optional, Tuple
 
 from tpotctl import users
@@ -575,11 +577,170 @@ def parse_sans(text: str) -> List[str]:
 
 
 def cert_sans(path: str, run: Callable = subprocess.run) -> List[str]:
-    proc = run(["openssl", "x509", "-in", path, "-noout", "-text"], stdout=subprocess.PIPE,
-               stderr=subprocess.PIPE, universal_newlines=True)
+    info = cert_info(path, run=run)
+    return info.sans if info else []
+
+
+EXPIRY_WARNING = 30         # days before the end of the certificate it is warned about
+
+
+@dataclass
+class CertInfo:
+    key: str                # ECDSA P-384, RSA 8192, else the algorithm and its size
+    self_signed: bool       # the first certificate of the file verifies against itself alone
+    issuer: str             # the CN of the issuer, else its RFC 2253 name
+    not_after: datetime     # UTC
+    sans: List[str]
+
+
+def _openssl(command: List[str], path: str, run: Callable):
+    try:
+        return run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", errors="replace")
+    except OSError as err:
+        raise SensorsError(f"cannot read the certificate {path}: {err}")
+
+
+def _first_line(text: str) -> str:
+    return next((line.strip() for line in (text or "").splitlines() if line.strip()), "")
+
+
+def _unescape(value: str) -> str:
+    """A value of an RFC 2253 name without its escapes (\\, and \\C3\\84)."""
+    out, i = bytearray(), 0
+    while i < len(value):
+        pair = value[i + 1:i + 3]
+        if value[i] == "\\" and len(pair) == 2 and all(c in string.hexdigits for c in pair):
+            out.append(int(pair, 16))
+            i += 3
+        elif value[i] == "\\" and i + 1 < len(value):
+            out += value[i + 1].encode()
+            i += 2
+        else:
+            out += value[i].encode()
+            i += 1
+    return out.decode("utf-8", "replace")
+
+
+def _issuer_name(name: str) -> str:
+    """The first CN of an RFC 2253 name (the most specific one), else the name as it is."""
+    attributes, current, i = [], "", 0
+    while i < len(name):
+        if name[i] == "\\":
+            current += name[i:i + 2]
+            i += 2
+            continue
+        if name[i] in ",+":
+            attributes.append(current)
+            current = ""
+        else:
+            current += name[i]
+        i += 1
+    attributes.append(current)
+    for attribute in attributes:
+        kind, _, value = attribute.partition("=")
+        if kind.strip().upper() == "CN" and value.strip():
+            return _unescape(value.strip())
+    return name
+
+
+def _key_name(text: str) -> str:
+    """ECDSA P-384, RSA 8192, else the algorithm and its size, from the public key of `openssl x509 -text`."""
+    _, found, spki = text.partition("Subject Public Key Info:")
+    spki = re.split(r"X509v3 extensions:|Signature Algorithm:|Signature Value:", spki, maxsplit=1)[0]
+    algorithm = re.search(r"Public Key Algorithm: *(\S+)", spki)
+    if not found or not algorithm:
+        raise SensorsError("no public key")
+    bits = re.search(r"Public-Key: *\((\d+) bit", spki)        # 1.1: RSA Public-Key, 4.x: (384 bit field, ...)
+    size = bits.group(1) if bits else ""
+    name = {"id-ecPublicKey": "ECDSA", "rsaEncryption": "RSA", "rsassaPss": "RSA-PSS"}.get(algorithm.group(1),
+                                                                                         algorithm.group(1))
+    if name == "ECDSA":
+        curve = re.search(r"NIST CURVE: *(\S+)", spki) or re.search(r"ASN1 OID: *(\S+)", spki)
+        size = curve.group(1) if curve else size
+    return f"{name} {size}" if size else name
+
+
+def cert_info(path: str, run: Callable = subprocess.run) -> Optional[CertInfo]:
+    """The certificate of the HIVE in `path` (nginx.crt, a CA's one may have its chain after it). None for a
+    missing or empty file, SensorsError for anything that cannot be read or parsed: T-Pot replaces only a
+    certificate it knows, never one it cannot read."""
+    try:
+        entry = os.stat(path)
+    except FileNotFoundError:
+        if os.path.lexists(path):
+            raise SensorsError(f"cannot read the certificate {path}: it is a link to nothing")
+        return None
+    except OSError as err:
+        raise SensorsError(f"cannot read the certificate {path}: {err}")
+    if not S_ISREG(entry.st_mode):
+        raise SensorsError(f"cannot read the certificate {path}: it is no file")
+    if entry.st_size == 0:
+        return None
+    proc = _openssl(["openssl", "x509", "-in", path, "-noout", "-issuer", "-enddate",
+                     "-nameopt", "RFC2253,-esc_msb", "-text"], path, run)
     if proc.returncode != 0:
-        raise SensorsError(f"cannot read the certificate {path}: {(proc.stderr or '').strip()}")
-    return parse_sans(proc.stdout or "")
+        raise SensorsError(f"cannot read the certificate {path}: {_first_line(proc.stderr) or 'openssl failed'}")
+    text = proc.stdout or ""
+    issuer = re.search(r"^issuer=(.*)$", text, re.M)
+    end = re.search(r"^notAfter=(.*)$", text, re.M)
+    try:
+        if not issuer or not end:
+            raise ValueError("no issuer or end date")
+        not_after = datetime.fromtimestamp(ssl.cert_time_to_seconds(end.group(1).strip()), timezone.utc)
+        key = _key_name(text)
+    except (ValueError, OverflowError, SensorsError) as err:
+        raise SensorsError(f"cannot read the certificate {path}: {err}")
+    sans = re.search(r"X509v3 Subject Alternative Name:.*\n(.*)", text)
+    with tempfile.TemporaryDirectory(prefix="tpot-cert-") as tmp:
+        # the first certificate alone, as the SENSOR checks it: a root after it would verify the whole file
+        first = os.path.join(tmp, "first.crt")
+        proc = _openssl(["openssl", "x509", "-in", path, "-out", first], path, run)
+        if proc.returncode != 0:
+            raise SensorsError(f"cannot read the certificate {path}: {_first_line(proc.stderr) or 'openssl failed'}")
+        proc = _openssl(["openssl", "verify", "-no-CApath", "-no-CAstore", "-no_check_time", "-CAfile", first, first],
+                        path, run)
+    if proc.returncode not in (0, 2):                           # 2: it does not verify against itself
+        raise SensorsError(f"cannot check the certificate {path}: {_first_line(proc.stderr) or 'openssl failed'}")
+    return CertInfo(key=key, self_signed=proc.returncode == 0, issuer=_issuer_name(issuer.group(1).strip()),
+                    not_after=not_after, sans=parse_sans(sans.group(1)) if sans else [])
+
+
+def days_left(info: CertInfo, now: datetime) -> int:
+    """Whole days until the end of the certificate, negative once it expired."""
+    return (info.not_after - now) // timedelta(days=1)
+
+
+def suggests_ecdsa(info: CertInfo) -> bool:
+    """T-Pot's own certificate of an earlier release (RSA): an ECDSA one would cost the HIVE far less CPU."""
+    return info.self_signed and info.key.startswith("RSA")
+
+
+def cert_summary(info: Optional[CertInfo], now: datetime, renew: str,
+                 *, path: str = "nginx.crt") -> List[Tuple[str, str]]:
+    """(level, text) lines on the certificate, level info / warn / hint; `renew` names how to renew it
+    (the command, or the button of the page), `path` the file a missing certificate would be."""
+    if info is None:
+        return [("warn", f"Certificate: none ({path} is missing or empty); tpot sensors cert --renew issues one.")]
+    origin = "self-signed" if info.self_signed else f"issued by {info.issuer}"
+    date = info.not_after.astimezone(timezone.utc).strftime("%Y-%m-%d")
+    lines = [("info", f"Certificate: {info.key}, {origin}, valid until {date}, "
+                      f"covers {', '.join(info.sans) or 'nothing'}")]
+    left = days_left(info, now)
+    if left < EXPIRY_WARNING:
+        advice = f"renew it: {renew}" if info.self_signed else \
+            f"renew it at {info.issuer}, then tpot sensors cert --distribute"
+        lines.append(("warn", f"The certificate expired on {date}; {advice}." if left < 0 else
+                      f"The certificate expires in {left} days ({date}); {advice}."))
+    if suggests_ecdsa(info):
+        lines.append(("hint", f"An ECDSA certificate costs this HIVE far less CPU per connection than RSA: {renew}."))
+    return lines
+
+
+def ca_renew_refusal(info: CertInfo, folder: str) -> str:
+    """Why --renew leaves a certificate of a CA alone, and the way to a self-signed one."""
+    return (f"The certificate of this HIVE is issued by {info.issuer}; T-Pot does not replace it. Renew it at "
+            f"that CA, or move nginx.crt and nginx.key ({folder}) aside, then tpot sensors cert --renew issues a "
+            f"self-signed one (--add names its addresses).")
 
 
 def covers(address: str, sans: List[str]) -> bool:

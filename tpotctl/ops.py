@@ -361,6 +361,27 @@ def docker(args: List[str], run: Callable = subprocess.run) -> str:
     return proc.stdout
 
 
+def nginx_reload(run: Callable = subprocess.run) -> str:
+    """nginx reads its certificate anew: "reloaded", "not running" (no T-Pot host, no docker, no running
+    nginx container) or OpsError with what `nginx -t` says, then the running nginx keeps the old one."""
+    if not linux_host() or not shutil.which("docker"):
+        return "not running"
+    try:
+        running = docker(["inspect", "-f", "{{.State.Running}}", "nginx"], run).strip()
+    except OpsError:
+        return "not running"
+    if running != "true":
+        return "not running"
+    try:
+        docker(["exec", "nginx", "nginx", "-t", "-q"], run)
+    except OpsError as err:
+        lines = [line.strip() for line in str(err).splitlines() if line.strip()]
+        raise OpsError(lines[0] if lines else "nginx -t failed") from err
+    # the master of the container (its PID 1) reads the configuration and the certificate again on HUP
+    docker(["kill", "--signal", "HUP", "nginx"], run)
+    return "reloaded"
+
+
 def containers(run: Callable = subprocess.run) -> List[Container]:
     # all of them: dps only showed running and exited ones, which hid restart loops
     return parse_ps(docker(["ps", "--all", "--format", "{{json .}}"], run))
