@@ -1691,6 +1691,32 @@ class CliTest(unittest.TestCase):
         self.assertEqual(steps, [])
         self.assertIn("give one with --add", flat(text))
 
+    def test_distribute_without_a_certificate(self):
+        from tpotctl import ops
+        registry = sensors.Registry(self.repo)
+        registry.grant("sensor-new-fox", "pw")
+        registry.record(sensors.Sensor("sensor-new-fox", host="10.0.0.5", ssh_user="debian",
+                                       hive_address="192.168.1.2", source="deployed"))
+        popen, children = fake_popen(0)
+        with mock.patch("subprocess.Popen", side_effect=popen):
+            code, text, steps = self.cert_cli("--distribute", info=None)
+            self.assertEqual(code, 1, text)
+            self.assertEqual((steps, children), ([], []))                     # nothing is copied
+            self.assertIn(f"there is no certificate to copy, {RENEW} issues one and copies it", flat(text))
+            code, text, steps = self.cert_cli("--renew", "--distribute", info=None, stdin=TTY("n\n"))
+            self.assertEqual(code, 1, text)
+            self.assertEqual((steps, children), ([], []))                     # declined: nothing copied
+            code, text, steps = self.cert_cli("--renew", "--yes", "--distribute", info=None,
+                                              reload=ops.OpsError("nginx: [emerg] cannot load certificate"))
+            self.assertEqual(code, 1, text)
+            self.assertEqual(children, [])                                    # nginx refused it: not copied
+            code, text, steps = self.cert_cli("--renew", "--yes", "--distribute", info=None)
+        self.assertEqual(code, 0, text)
+        self.assertEqual(steps, [("renew", ["IP:192.168.1.2"]), "reload"])
+        self.assertEqual(len(children), 1)
+        self.assertEqual(children[0].args[0], "ansible-playbook")
+        self.assertIn("sensor-new-fox has the new certificate.", flat(text))
+
     def test_renew_refuses_a_certificate_it_cannot_read(self):
         crt = os.path.join(self.repo, "data", "nginx", "cert", "nginx.crt")
         with open(crt, "rb") as handle:

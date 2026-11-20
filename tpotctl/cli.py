@@ -1723,6 +1723,11 @@ def run_sensor_cert(args, registry, console) -> int:
         if state == "not reloaded":
             say.warn("nginx uses the new certificate from the next start of T-Pot on (tpot restart).", console.file)
     if args.distribute is not None:
+        # sensor_cert.yml copies nginx.crt as it is: an empty one would replace the working hive.crt of each
+        # sensor (after a declined or failed renew the command has ended above)
+        if not info and not args.renew:
+            error(f"there is no certificate to copy, {CERT_RENEW} issues one and copies it")
+            return 1
         chosen = [registry.get(n) for n in args.distribute] if args.distribute else registry.sensors()
         reachable = [s for s in chosen if s.host and s.ssh_user and s.access]
         for sensor in chosen:
