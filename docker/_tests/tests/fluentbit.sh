@@ -638,7 +638,7 @@ write_compose() {
     printf '    depends_on: [hive]\n'
     printf '    read_only: true\n'
     printf '    tmpfs: ["/tmp:uid=2000,gid=2000"]\n'
-    printf '    mem_limit: 256m\n'
+    printf '    mem_limit: 512m\n'
     printf '    ulimits:\n'
     printf '      nofile:\n'
     printf '        soft: %s\n' "${NOFILE_SOFT}"

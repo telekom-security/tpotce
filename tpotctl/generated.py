@@ -33,6 +33,10 @@ class ConfigurationStatus:
 
 
 def unreadable_text(name: str, reason: str) -> str:
+    if reason == "not UTF-8 text":
+        return f"{name} is not UTF-8 text; save it as UTF-8, then try again."
+    if reason == "a folder":
+        return f"{name} is a folder, not a file; move it aside, then try again."
     return f"{name} cannot be read ({reason}); fix its owner or mode, then try again."
 
 
@@ -199,8 +203,14 @@ def configuration_status(root: str, compose_setting: Optional[str] = None) -> Co
     try:
         with open(compose_path, encoding="utf-8") as handle:
             compose_text = handle.read()
-    except (FileNotFoundError, UnicodeDecodeError):
+    except FileNotFoundError:
         drift.append(compose_name)
+    except UnicodeDecodeError:
+        drift.append(compose_name)
+        unreadable[compose_name] = "not UTF-8 text"
+    except IsADirectoryError:
+        drift.append(compose_name)
+        unreadable[compose_name] = "a folder"
     except OSError as err:
         drift.append(compose_name)
         unreadable[compose_name] = err.strerror or str(err)

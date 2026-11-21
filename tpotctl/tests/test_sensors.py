@@ -28,6 +28,10 @@ from tpotctl.envfile import EnvFile  # noqa: E402
 
 # the UI needs Textual, the CLI Rich
 textual = importlib.util.find_spec("textual") and importlib.util.find_spec("rich")
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 WEB_USER = "dHNlYzokYXByMSRYUnE2SC5rbiRVRjZQM1VVQmJVNWJUQmNmSGRuUFQxCgo="
 # two sensors of 24.04.1, deployed with deploy.sh (apr1)
@@ -1034,6 +1038,7 @@ class FileOnlyTest(unittest.TestCase):
         self.assertEqual(self.read(self.lswebpasswd), "legacy:$1$salt$legacyhash\n")
         self.assertEqual(self.registry().entries(), [])
 
+    @unittest.skipUnless(yaml, "PyYAML is not installed, run with the venv of tpot")
     def test_env_check_warns(self):
         from tpotctl import settings
         problems = [p for p in settings.load(self.repo).problems() if p.key == "LS_WEB_USER"]
@@ -3064,15 +3069,30 @@ class DeployComposeTest(unittest.TestCase):
         text = "# my sensor\n\n" + self.customize("SENSOR", "--remove", "ewsposter")
         with open(self.compose, "w", encoding="utf-8") as handle:
             handle.write(text)
-        out = self.run_task()
-        self.assertTrue(out.startswith("rebuilt-kept "), out)
-        path = out.split(" ", 1)[1]
+        out = self.run_task().splitlines()
+        self.assertEqual(len(out), 2, out)
+        self.assertEqual(out[0], "rebuilt-kept")
+        path = out[1]
         self.assertEqual(os.path.dirname(path), self.backups)
         self.assertRegex(os.path.basename(path), r"^docker-compose_sensor_\d{14}\.yml$")
         self.assertEqual(self.read(path), text)
         rebuilt = self.read(self.compose)
         self.assertNotIn("# my sensor", rebuilt)
         self.assertNotIn("\n  ewsposter:\n", rebuilt)
+
+    def test_a_backup_path_with_a_space_is_named_whole(self):
+        home = os.path.join(self.tmp, "my home")
+        os.makedirs(home)
+        self.env["HOME"] = home
+        text = "# my sensor\n\n" + self.customize("SENSOR", "--remove", "ewsposter")
+        with open(self.compose, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        out = self.run_task().splitlines()
+        self.assertEqual(out[0].split()[0], "rebuilt-kept")
+        # the warning names stdout_lines[1], Ansible's splitlines() of stdout
+        path = out[1]
+        self.assertEqual(os.path.dirname(path), os.path.join(home, "tpot_backups"))
+        self.assertEqual(self.read(path), text)
 
     def test_comment_lines_without_a_backup_keep_the_file(self):
         text = "# my sensor\n\n" + self.customize("SENSOR", "--remove", "ewsposter")
@@ -3131,7 +3151,8 @@ class DeployComposeTest(unittest.TestCase):
         message = str(backup[0]["ansible.builtin.debug"])
         self.assertIn("The lines above '# T-Pot: CUSTOM' in the docker-compose.yml of the sensor "
                       "are not in the rebuilt one, they are kept in ", message)
-        self.assertIn(register + ".stdout.split()[1]", message)
+        self.assertIn(register + ".stdout_lines[1]", message)
+        self.assertNotIn(".stdout.split()[1]", message)
 
 
 class SensorCertPlayTest(unittest.TestCase):

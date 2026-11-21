@@ -134,7 +134,8 @@ class SettingsTest(unittest.TestCase):
         with self.assertRaisesRegex(self.settings.SettingsError, "Run tpot update first"):
             self.load().change({"TPOT_BLACKHOLE": "DISABLED"})
 
-    def assert_unreadable_compose_blocks(self, make_unreadable):
+    def assert_unreadable_compose_blocks(self, make_unreadable, text=("docker-compose.yml cannot be read (",
+                                                                        "fix its owner or mode, then try again.")):
         path = os.path.join(self.repo, "docker-compose.yml")
         env_path = os.path.join(self.repo, ".env")
         with open(env_path, encoding="utf-8") as handle:
@@ -143,11 +144,11 @@ class SettingsTest(unittest.TestCase):
         current = self.load()
         errors = [p for p in current.problems() if p.key == "TPOT_DOCKER_COMPOSE" and p.level == "error"]
         self.assertEqual(len(errors), 1)
-        self.assertIn("docker-compose.yml cannot be read (", errors[0].text)
-        self.assertIn("fix its owner or mode, then try again.", errors[0].text)
+        for part in text:
+            self.assertIn(part, errors[0].text)
         with self.assertRaises(self.settings.SettingsError) as caught:
             current.change({"TPOT_BLACKHOLE": "ENABLED"})
-        self.assertIn("cannot be read", str(caught.exception))
+        self.assertIn(text[0], str(caught.exception))
         self.assertNotIn("Run tpot update first", str(caught.exception))
         with open(env_path, encoding="utf-8") as handle:
             self.assertEqual(handle.read(), before)
@@ -156,7 +157,8 @@ class SettingsTest(unittest.TestCase):
         def folder(path):
             os.unlink(path)
             os.mkdir(path)
-        self.assert_unreadable_compose_blocks(folder)
+        self.assert_unreadable_compose_blocks(
+            folder, ("docker-compose.yml is a folder, not a file; move it aside, then try again.",))
 
     @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root reads a file of mode 000")
     def test_compose_of_mode_000_blocks_with_its_reason(self):

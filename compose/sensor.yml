@@ -900,7 +900,7 @@ services:
      - TPOT_HIVE_IP=${TPOT_HIVE_IP}
      - LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION:-full}
      - FLB_STORAGE_LIMIT=${TPOT_SENSOR_BUFFER_MB:-512}M
-    mem_limit: 256m
+    mem_limit: 512m
     ulimits:
       nofile:
         soft: 65536

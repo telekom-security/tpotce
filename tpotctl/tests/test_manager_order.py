@@ -5,6 +5,11 @@ import unittest
 
 from tpotctl import cli
 
+try:
+    import textual  # noqa: F401
+except ImportError:
+    textual = None
+
 
 class ManagerOrderTest(unittest.TestCase):
     def test_help_groups_all_commands_once(self):
@@ -45,6 +50,7 @@ class ManagerOrderTest(unittest.TestCase):
                 self.assertTrue(text.startswith("T-Pot Manager: tpot " + " ".join(path) + "\n"),
                                 text)
 
+    @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
     def test_page_order_matches_the_grouped_help(self):
         from tpotctl.app import PANES
         self.assertEqual([key for key, *_ in PANES],

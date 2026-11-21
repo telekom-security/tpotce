@@ -21,11 +21,20 @@ import urllib.error
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
-import yaml
-from rich.console import Console
+try:
+    import yaml
+except ImportError:
+    yaml = None
+try:
+    from rich.console import Console
+except ImportError:
+    Console = None
 
-from tpotctl import cli, elastic, envschema, settings
+from tpotctl import cli, elastic
 from tpotctl.envfile import EnvFile
+
+if yaml:
+    from tpotctl import envschema, settings
 from tpotctl.tests.test_settings import make_checkout
 
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -49,12 +58,14 @@ def with_min_age(min_age):
 
 class RuleTest(unittest.TestCase):
 
+    @unittest.skipUnless(yaml, "PyYAML is not installed, run with the venv of tpot")
     def test_value_of(self):
         for item in load_cases()["values"]:
             with self.subTest(min_age=item["min_age"]):
                 self.assertEqual(elastic.value_of(with_min_age(item["min_age"])), item["value"])
         self.assertEqual(elastic.value_of(None), "")
 
+    @unittest.skipUnless(yaml, "PyYAML is not installed, run with the venv of tpot")
     def test_shapes(self):
         for item in load_cases()["shapes"]:
             with self.subTest(shape=item["name"]):
@@ -98,6 +109,7 @@ class RuleTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(result.stdout, "")
 
+    @unittest.skipUnless(yaml, "PyYAML is not installed, run with the venv of tpot")
     def test_shared_cases(self):
         for case in load_cases()["cases"]:
             with self.subTest(case=case["name"]):
@@ -135,6 +147,7 @@ class RuleTest(unittest.TestCase):
                 else:
                     self.assertIsNone(decision.policy)
 
+    @unittest.skipUnless(yaml, "PyYAML is not installed, run with the venv of tpot")
     def test_update_keeps_everything_but_delete_and_meta(self):
         case = next(c for c in load_cases()["cases"] if c["name"].startswith("managed with a warm phase"))
         policy = elastic.decide(case["value"], case["policy"], shorten=True).policy
@@ -313,6 +326,7 @@ class WiringTest(unittest.TestCase):
         self.assertEqual([line for line in between.splitlines() if line.strip() and not line.lstrip().startswith("#")],
                          [], between)
 
+    @unittest.skipUnless(yaml, "PyYAML is not installed, run with the venv of tpot")
     def test_tpotinit_reaches_elasticsearch_in_every_edition(self):
         # host network: the published 127.0.0.1:64298; otherwise the network of elasticsearch
         script = self.read("docker", "tpotinit", "dist", "bin", "es_retention.sh")
@@ -647,6 +661,7 @@ class SensorRetentionTest(unittest.TestCase):
         self.assertFalse(any("logstash-" in path or path == "/_ilm/policy/tpot"
                              for method, path, data in es.requests))
 
+    @unittest.skipUnless(yaml, "PyYAML is not installed, run with the venv of tpot")
     def test_sensor_history_uses_the_same_shared_safety_decisions(self):
         scope = self.scope()
         for case in load_cases()["cases"]:
@@ -939,6 +954,7 @@ class CliTest(unittest.TestCase):
         self.assertTrue(parse(["elastic", "retention", "30", "--accept-data-loss"]).accept_data_loss)
         self.assertFalse(parse(["elastic", "retention", "30", "--accept-data-loss"]).yes)
 
+    @unittest.skipUnless(yaml, "PyYAML is not installed, run with the venv of tpot")
     def test_the_setting_offers_the_usual_retentions(self):
         rule = envschema.load_schema()["TPOT_ES_RETENTION"]
         self.assertEqual(rule.widget, "choice")
@@ -947,6 +963,7 @@ class CliTest(unittest.TestCase):
                          [("30", "30 days"), ("90", "90 days"), ("180", "180 days"), ("365", "1 year"),
                           ("off", "never delete")])
 
+    @unittest.skipUnless(yaml, "PyYAML is not installed, run with the venv of tpot")
     def test_retention_value_must_be_valid_before_anything_is_asked(self):
         args = cli.build_parser().parse_args(["elastic", "retention", "30d", "-y"])
         self.assertEqual(cli.retention_value_problem(args.value), '"30d" is not a number of days from 1 to 3650 or off.')
@@ -962,6 +979,7 @@ class FakeSettings:
         return []
 
 
+@unittest.skipUnless(yaml and Console, "PyYAML or Rich is not installed, run with the venv of tpot")
 class SensorRetentionCliTest(unittest.TestCase):
     def setUp(self):
         self.load_settings = settings.load
@@ -1069,6 +1087,7 @@ class SensorRetentionCliTest(unittest.TestCase):
                 self.assertEqual(self.puts(), [])
 
 
+@unittest.skipUnless(yaml and Console, "PyYAML or Rich is not installed, run with the venv of tpot")
 class RunElasticTest(unittest.TestCase):
     """The decisions of `tpot elastic retention`: what is asked, what is written, what is applied."""
 
@@ -1475,6 +1494,7 @@ class RunElasticTest(unittest.TestCase):
 
 
 
+@unittest.skipUnless(yaml and Console, "PyYAML or Rich is not installed, run with the venv of tpot")
 class RunEnvRetentionTest(unittest.TestCase):
     """tpot env set TPOT_ES_RETENTION: what it says about the next start."""
 

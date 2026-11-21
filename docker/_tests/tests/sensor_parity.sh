@@ -564,7 +564,7 @@ services:
     container_name: "${TEST_CONTAINER_NAME}"
     read_only: true
     tmpfs: ["/tmp:uid=2000,gid=2000"]
-    mem_limit: 256m
+    mem_limit: 512m
     environment:
       TPOT_HIVE_IP: nginx
       TPOT_HIVE_USER: "${SENSOR_AUTH}"

@@ -315,6 +315,7 @@ class FleetCommandTest(unittest.TestCase):
         self.assertEqual(result, 1)
         report.assert_called_once_with("fleet unavailable")
 
+    @unittest.skipUnless(importlib.util.find_spec("rich"), "needs rich (the venv of tpot)")
     def test_fleet_host_and_configuration_gates_return_environment_exit_code(self):
         with patch.object(cli.os, "geteuid", return_value=1000), \
                 patch.object(cli.ops, "require_linux_host", side_effect=cli.ops.OpsError("not a T-Pot host")), \

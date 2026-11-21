@@ -129,8 +129,11 @@ class ConfigTest(unittest.TestCase):
         version = (ROOT / "version").read_text(encoding="utf-8").strip()
         self.assertEqual(service["image"], f"ghcr.io/telekom-security/fluentbit:{version}")
         self.assertTrue(service["read_only"])
-        self.assertEqual(service["mem_limit"], "256m")
+        self.assertEqual(service["mem_limit"], "512m")
         self.assertIn("/tmp", service["tmpfs"][0])
+        for name in ("sensor.yml", "tpot_services.yml"):
+            with open(ROOT / "compose" / name, encoding="utf-8") as handle:
+                self.assertEqual(yaml.safe_load(handle)["services"]["fluentbit"]["mem_limit"], "512m", name)
 
     def test_entrypoint(self):
         text = (DIST / "entrypoint.sh").read_text(encoding="utf-8")

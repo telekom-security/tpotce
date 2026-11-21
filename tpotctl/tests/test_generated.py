@@ -178,8 +178,32 @@ class GeneratedTest(unittest.TestCase):
             stream = io.StringIO()
             with redirect_stderr(stream):
                 self.assertEqual(generated.main(["check", "--root", root]), 1)
-            self.assertIn("docker-compose.yml cannot be read (", stream.getvalue())
+            self.assertIn("docker-compose.yml is a folder, not a file; move it aside, then try again.",
+                          stream.getvalue())
             self.assertNotIn("Run tpot update first", stream.getvalue())
+            self.assertEqual(status.unreadable["docker-compose.yml"], "a folder")
+
+    def test_check_names_a_compose_that_is_not_utf8(self):
+        with tempfile.TemporaryDirectory() as root:
+            os.makedirs(os.path.join(root, "compose"))
+            with open(os.path.join(root, "env.example"), "w", encoding="utf-8") as out:
+                out.write("TPOT_VERSION=1\n")
+            with open(os.path.join(root, ".env"), "w", encoding="utf-8") as out:
+                out.write("TPOT_VERSION=local\n")
+            generated.stamp_file(os.path.join(root, ".env"), root, kind="env")
+            with open(os.path.join(root, "docker-compose.yml"), "wb") as out:
+                out.write(b"# T-Pot: STANDARD\nservices: {}\n# \xff\xfe\n")
+
+            status = generated.configuration_status(root)
+            self.assertEqual(status.drift, ["docker-compose.yml"])
+            self.assertEqual(status.unreadable, {"docker-compose.yml": "not UTF-8 text"})
+            self.assertEqual(generated.drift_text(status),
+                             "docker-compose.yml is not UTF-8 text; save it as UTF-8, then try again.")
+
+    def test_unreadable_text_keeps_the_owner_advice_for_other_reasons(self):
+        self.assertEqual(generated.unreadable_text("docker-compose.yml", "Permission denied"),
+                         "docker-compose.yml cannot be read (Permission denied); fix its owner or mode, "
+                         "then try again.")
 
     def test_unmanaged_compose_warns_without_bypassing_env_drift(self):
         with tempfile.TemporaryDirectory() as root:

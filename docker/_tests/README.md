@@ -57,7 +57,7 @@ Common options:
 ./docker/_tests/run.sh --quick fluentbit
 ```
 
-`--quick` skips the long cases of a test (fluentbit case 13, about 10 minutes); a case named with `--cases` still runs.
+`--quick` skips the long cases of a test (fluentbit case 13, about 15 to 35 minutes); a case named with `--cases` still runs.
 
 The runner checks common and test-specific dependencies before starting
 containers, and fails early with a list of missing tools.

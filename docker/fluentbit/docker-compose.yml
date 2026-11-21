@@ -9,7 +9,7 @@ services:
      - TPOT_HIVE_IP=${TPOT_HIVE_IP}
      - TPOT_HIVE_USER=${TPOT_HIVE_USER}
      - LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION:-full}
-    mem_limit: 256m
+    mem_limit: 512m
     ulimits:
       nofile:
         soft: 65536

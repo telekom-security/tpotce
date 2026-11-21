@@ -4,45 +4,52 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical
-from textual.widgets import ContentSwitcher, Footer, ListView
-
-from tpotctl import app as tapp, envschema, ops, settings, theme
 from tpotctl.envfile import EnvFile
-from tpotctl.tests.test_app import FakeBackend
+
+try:
+    import textual  # noqa: F401
+except ImportError:
+    textual = None
+
+if textual:
+    from textual.app import App, ComposeResult
+    from textual.containers import Horizontal, Vertical
+    from textual.widgets import ContentSwitcher, Footer, ListView
+
+    from tpotctl import app as tapp, envschema, ops, settings, theme
+    from tpotctl.tests.test_app import FakeBackend
+
+    class CompactApp(App):
+        CSS_PATH = str(Path(tapp.__file__).with_name("tpot.tcss"))
+        HORIZONTAL_BREAKPOINTS = tapp.TpotApp.HORIZONTAL_BREAKPOINTS
+        VERTICAL_BREAKPOINTS = tapp.TpotApp.VERTICAL_BREAKPOINTS
+
+        def __init__(self, pane, current):
+            super().__init__()
+            theme.apply(self)
+            self.backend = FakeBackend()
+            self.backend.settings = lambda: current
+            self.backend.config_stamp = lambda: 0
+            self.pane = pane
+
+        def get_theme_variable_defaults(self):
+            return theme.variable_defaults()
+
+        def compose(self) -> ComposeResult:
+            yield Vertical(id="header")
+            with Horizontal(id="body"):
+                yield Vertical(id="sidebar")
+                yield self.pane(id="status" if self.pane is tapp.StatusPane else "settings", classes="pane")
+            yield Footer()
+
+        def update_header(self, *args):
+            pass
+
+        def start_problems(self):
+            return []
 
 
-class CompactApp(App):
-    CSS_PATH = str(Path(tapp.__file__).with_name("tpot.tcss"))
-    HORIZONTAL_BREAKPOINTS = tapp.TpotApp.HORIZONTAL_BREAKPOINTS
-    VERTICAL_BREAKPOINTS = tapp.TpotApp.VERTICAL_BREAKPOINTS
-
-    def __init__(self, pane, current):
-        super().__init__()
-        theme.apply(self)
-        self.backend = FakeBackend()
-        self.backend.settings = lambda: current
-        self.backend.config_stamp = lambda: 0
-        self.pane = pane
-
-    def get_theme_variable_defaults(self):
-        return theme.variable_defaults()
-
-    def compose(self) -> ComposeResult:
-        yield Vertical(id="header")
-        with Horizontal(id="body"):
-            yield Vertical(id="sidebar")
-            yield self.pane(id="status" if self.pane is tapp.StatusPane else "settings", classes="pane")
-        yield Footer()
-
-    def update_header(self, *args):
-        pass
-
-    def start_problems(self):
-        return []
-
-
+@unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
 class CompactRepairTest(unittest.IsolatedAsyncioTestCase):
     def current(self):
         folder = tempfile.TemporaryDirectory()

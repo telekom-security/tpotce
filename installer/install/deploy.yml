@@ -76,9 +76,10 @@
     - name: Put the sensor compose file in place
       # A SENSOR compose file of compose/customizer.py is rebuilt from its header
       # (as update.sh fuRESTORE_CUSTOM does), one edited by hand or that cannot be
-      # rebuilt is kept; anything else becomes sensor.yml. Prints one line, its
-      # first word says what happened. Lines above the header are not in the
-      # rebuilt file, so they are kept in a copy first (rebuilt-kept <copy>).
+      # rebuilt is kept; anything else becomes sensor.yml. Its first line says
+      # what happened. Lines above the header are not in the rebuilt file, so
+      # they are kept in a copy first (rebuilt-kept, then the copy on a line of
+      # its own: its path may hold a space).
       ansible.builtin.shell: |
         mySENSOR="{{ remote_sensor_yml_path }}"
         mySENSOR="${mySENSOR/#\~/$HOME}"
@@ -126,7 +127,7 @@
             myTMP=""
             if [ -n "${myKEPT}" ];
               then
-                echo "rebuilt-kept ${myKEPT}"
+                printf 'rebuilt-kept\n%s\n' "${myKEPT}"
               else
                 echo rebuilt
             fi
@@ -148,7 +149,7 @@
 
     - name: Warn that the lines above the customizer header were kept in a copy
       ansible.builtin.debug:
-        msg: "The lines above '# T-Pot: CUSTOM' in the docker-compose.yml of the sensor are not in the rebuilt one, they are kept in {{ my_sensor_compose.stdout.split()[1] }}."
+        msg: "The lines above '# T-Pot: CUSTOM' in the docker-compose.yml of the sensor are not in the rebuilt one, they are kept in {{ my_sensor_compose.stdout_lines[1] }}."
       when: (my_sensor_compose.stdout.split() | first | default('')) == 'rebuilt-kept'
 
     - name: Stamp the generated compose file on the sensor
