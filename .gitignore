@@ -16,3 +16,4 @@ docker/_builder/.env.local
 installer/iso/out/
 .github/copilot-instructions.md
 .github/skills/
+.worktrees/
