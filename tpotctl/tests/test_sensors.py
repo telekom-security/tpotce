@@ -171,10 +171,14 @@ class TTY(io.StringIO):
 
 
 class HelpersTest(unittest.TestCase):
+    DOCKERFILE_CERT_DIRECTORY_COPY = re.compile(
+        r"(?im)^[ \t]*(?:COPY|ADD)\b[^\n]*(?:^|[\s/])(?:conf/ssl|nginx/ssl)(?:/|\s|$)")
 
     def test_nginx_dockerfile_check_only_matches_certificate_directories(self):
-        check = re.compile(r"(?i)\b(?:COPY|ADD)\b[^\n]*(?:^|[\s/])(?:conf/ssl|nginx/ssl)(?:/|\s|$)")
+        check = self.DOCKERFILE_CERT_DIRECTORY_COPY
         self.assertIsNone(check.search("RUN apk add openssl && echo ssl"))
+        self.assertIsNone(check.search("RUN printf 'COPY conf/ssl/' > /tmp/example"))
+        self.assertIsNone(check.search('RUN echo "ADD nginx/ssl/"'))
         self.assertIsNone(check.search("# no conf/ssl or nginx/ssl is copied"))
         self.assertIsNone(check.search("COPY ssl-assets/ /etc/nginx/"))
         for line in ("COPY conf/ssl/ /etc/nginx/cert/", "COPY dist/conf/ssl /out/cert",
@@ -340,8 +344,7 @@ class HelpersTest(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(conf, "ssl")))
         with open(os.path.join(REPO_DIR, "docker", "nginx", "Dockerfile"), encoding="utf-8") as handle:
             dockerfile = handle.read()
-        self.assertIsNone(re.search(r"(?i)\b(?:COPY|ADD)\b[^\n]*(?:^|[\s/])(?:conf/ssl|nginx/ssl)(?:/|\s|$)",
-                                    dockerfile))
+        self.assertIsNone(self.DOCKERFILE_CERT_DIRECTORY_COPY.search(dockerfile))
 
 
 class CertificateTest(unittest.TestCase):
