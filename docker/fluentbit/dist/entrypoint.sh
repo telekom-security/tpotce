@@ -138,10 +138,11 @@ fuVERDICT () {
   fi
 }
 
-# One request to /tpot-ingest with the curl options given; sets myCODE and myMARK of fuPROBE
+# One request to /tpot-ingest with the curl options given; sets myCODE and myMARK of fuPROBE. Only the
+# HIVE's own headers count: an HTTPS proxy's CONNECT reply stays out of the dump (curl >= 7.54)
 fuASK () {
   rm -f "$myHEADERS" "$myERRORS"
-  curl -sS --max-time 10 "${myTLS[@]}" "$@" -o /dev/null -D "$myHEADERS" \
+  curl -sS --max-time 10 --suppress-connect-headers "${myTLS[@]}" "$@" -o /dev/null -D "$myHEADERS" \
     "https://${TPOT_HIVE_IP}:${TPOT_HIVE_PORT}/tpot-ingest" 2>"$myERRORS" &
   myCHILD=$!
   wait "$myCHILD"

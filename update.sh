@@ -1617,9 +1617,10 @@ function fuHIVE_PINNED () {
 
 # One request of fuHIVE_INGEST to /tpot-ingest with the curl options given. Sets its myANSWER (the
 # headers of -D - and the error line of curl, curl: (N) ..., in one answer), myRC, myCODE and myMARK.
+# Only the HIVE's own headers count: an HTTPS proxy's CONNECT reply stays out of them (curl >= 7.54).
 function fuHIVE_ASK () {
 	myRC=0
-	myANSWER=$(curl -sS --max-time 10 "${myTLS[@]}" "$@" -o /dev/null -D - \
+	myANSWER=$(curl -sS --max-time 10 --suppress-connect-headers "${myTLS[@]}" "$@" -o /dev/null -D - \
 	  "https://${myHIVE}:64294/tpot-ingest" 2>&1) || myRC=$?
 	myCODE=$(printf '%s\n' "${myANSWER}" | tr -d '\r' | awk '/^HTTP\//{code=$2} END{print code}')
 	myMARK=$(printf '%s\n' "${myANSWER}" | tr -d '\r' \

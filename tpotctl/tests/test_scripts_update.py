@@ -3437,6 +3437,8 @@ with open(os.path.join(home, "curl.jsonl"), "a", encoding="utf-8") as handle:
     handle.write(json.dumps(call) + "\\n")
 with open(os.path.join(home, "answer-" + stage), encoding="utf-8") as handle:
     answer = json.load(handle)
+if answer["headers"] and os.path.exists(os.path.join(home, "proxy")) and "--suppress-connect-headers" not in args:
+    sys.stdout.write("HTTP/1.1 200 Connection established\\r\\nX-TPot-Ingest: login\\r\\n\\r\\n")
 if answer["headers"]:
     sys.stdout.write("".join(line + "\\r\\n" for line in answer["headers"]) + "\\r\\n")
 if answer["error"]:
@@ -3589,6 +3591,15 @@ os.execvp(sys.argv[2], sys.argv[2:])
 
     def test_an_old_hive_never_gets_the_login(self):
         self.env_file()
+        done, calls = self.probe(self.said("HTTP/2 401", 'www-authenticate: Basic realm="closed site"'), self.TAKEN)
+        self.assertEqual(done, ["warn:" + self.OLD])
+        self.assertEqual(len(calls), 1)
+        self.assertNotIn("-H", calls[0]["argv"])
+
+    def test_a_proxy_marker_never_gets_the_login(self):
+        # an HTTPS proxy's CONNECT reply is no answer of the HIVE: its X-TPot-Ingest must not open stage 2
+        self.env_file()
+        Path(self.home, "proxy").write_text("", encoding="utf-8")
         done, calls = self.probe(self.said("HTTP/2 401", 'www-authenticate: Basic realm="closed site"'), self.TAKEN)
         self.assertEqual(done, ["warn:" + self.OLD])
         self.assertEqual(len(calls), 1)

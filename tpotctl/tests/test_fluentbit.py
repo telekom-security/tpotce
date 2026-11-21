@@ -240,6 +240,8 @@ if len(lines) > 1:
         handle.write("\\n".join(lines[1:]) + "\\n")
 code, _, mark = lines[0].partition(" ")
 with open(headers, "w", encoding="utf-8") as handle:
+    if os.path.exists(os.path.join(stub, "proxy")) and "--suppress-connect-headers" not in args:
+        handle.write("HTTP/1.1 200 Connection established\\r\\nX-TPot-Ingest: login\\r\\n\\r\\n")
     handle.write("HTTP/1.1 " + code + " Stub\\r\\n" + ("X-TPot-Ingest: " + mark + "\\r\\n" if mark else "") + "\\r\\n")
 """
 
@@ -429,6 +431,16 @@ os.execvp(sys.argv[2], sys.argv[2:])
                 self.assertEqual(sum(call["header"] is not None for call in calls), logins)
                 self.assertEqual([sleep["seconds"] for sleep in sleeps], ["300"])
                 self.assertIsNone(started)
+
+    def test_a_proxy_marker_never_gets_the_login(self):
+        # an HTTPS proxy's CONNECT reply is no answer of the HIVE: its X-TPot-Ingest must not open stage 2
+        (self.stub / "proxy").write_text("", encoding="utf-8")
+        result, calls, _sleeps, started = self.run_probe(["401"], ["204 2"])
+        self.assertEqual(result.returncode, 143, result.stderr)
+        self.assertIn(self.OLD, result.stderr)
+        self.assertEqual(len(calls), 1)
+        self.assertIsNone(calls[0]["header"])
+        self.assertIsNone(started)
 
     def test_the_login_is_never_in_the_argv_and_gone_before_the_start(self):
         result, calls, _sleeps, started = self.run_probe(["401 login"], ["204 2"])
