@@ -310,7 +310,7 @@ PY
 # and answers 200; 64306 (the probe input of a new Logstash) records too and answers 204 with the
 # marker and headers that must not reach the client. /state/mode: "new" (default), "200" (the probe
 # port answers 200 with the marker and a body), "401" (the probe port asks for a login of its own),
-# "old" (no listener on 64306, as a Logstash before it)
+# "403" (the probe port denies the request), "old" (no listener on 64306, as a Logstash before it)
 write_logstash_standin() {
   cat > "${STATE_DIR}/logstash.py" <<'PY'
 import http.server
@@ -356,6 +356,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(401)
             self.send_header("X-TPot-Ingest", "2")
             self.send_header("WWW-Authenticate", 'Basic realm="stand-in"')
+            self.send_header("Content-Length", "9")
+            self.end_headers()
+            self.wfile.write(b"LEAK-BODY")
+        elif mode() == "403":
+            self.send_response(403)
             self.send_header("Content-Length", "9")
             self.end_headers()
             self.wfile.write(b"LEAK-BODY")
@@ -579,6 +584,11 @@ status, headers, body = probe()
 check("probe, 401 of Logstash: 503 without a marker or WWW-Authenticate",
       status == 503 and headers.get("X-TPot-Ingest") is None and headers.get("WWW-Authenticate") is None
       and body == b"ingest pipeline not ready\n")
+set_mode("403")
+status, headers, body = probe()
+check("probe, 403 of Logstash: 503 through the retained not-ready mapping",
+      status == 503 and headers.get("X-TPot-Ingest") is None and headers.get("WWW-Authenticate") is None
+      and body == b"ingest pipeline not ready\n")
 
 # old Logstash (no probe input): 503 without the marker, and no event could be made
 set_mode("old")
@@ -668,10 +678,16 @@ PY
 # The handshake of both listeners (openssl of the init image, in the network of the nginx container):
 # the post-quantum hybrid key exchange of ssl_ecdh_curve and the P-384 key of the test certificate
 run_tls_checks() {
-  local port output rc=0
+  local port output rc=0 command_rc=0
   for port in 64294 64297; do
-    output="$(docker run --rm --network "container:${TEST_CONTAINER_NAME}" --entrypoint openssl "${INIT_IMAGE}" \
-      s_client -connect "127.0.0.1:${port}" -groups X25519MLKEM768 </dev/null 2>&1)" || true
+    command_rc=0
+    output="$(docker run --rm --network "container:${TEST_CONTAINER_NAME}" --entrypoint timeout "${INIT_IMAGE}" \
+      -k 1 "${TEST_TIMEOUT}" openssl s_client -connect "127.0.0.1:${port}" -groups X25519MLKEM768 </dev/null 2>&1)" \
+      || command_rc=$?
+    if [[ "${command_rc}" -ne 0 ]]; then
+      echo "FAIL TLS ${port}: s_client exited with status ${command_rc}"
+      rc=1
+    fi
     if grep -q "group: X25519MLKEM768" <<<"${output}"; then
       echo "ok   TLS ${port}: the key exchange is X25519MLKEM768"
     else
