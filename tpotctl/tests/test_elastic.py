@@ -579,7 +579,10 @@ class FakeES:
             raise urllib.error.URLError("connection refused")
         status, body = self.routes[key]
         if status >= 400:
-            raise urllib.error.HTTPError(request.full_url, status, "err", {}, io.BytesIO(json.dumps(body).encode()))
+            # closed already: elastic.py reads no body of an error, and one left open warns when it is collected
+            error = urllib.error.HTTPError(request.full_url, status, "err", {}, io.BytesIO(json.dumps(body).encode()))
+            error.close()
+            raise error
         return io.BytesIO(json.dumps(body).encode())       # a context manager, as urlopen's answer
 
 

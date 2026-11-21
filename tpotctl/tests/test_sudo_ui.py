@@ -5,14 +5,14 @@ from pathlib import Path
 import unittest
 from unittest import mock
 
-from tpotctl.tests import current_configuration, isolate
+from tpotctl.tests import AsyncTestCase, current_configuration, isolate
 
 isolate()
 textual = importlib.util.find_spec("textual")
 
 
 @unittest.skipUnless(textual, "run with the T-Pot Manager venv")
-class SudoUiTest(unittest.IsolatedAsyncioTestCase):
+class SudoUiTest(AsyncTestCase):
     def test_debug_representations_do_not_disclose_collected_passwords(self):
         from rich.pretty import pretty_repr
         from tpotctl.screens.sudo import SudoChoice

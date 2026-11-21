@@ -3,7 +3,7 @@ none of them is a dead end, and left at the start of a line goes back to the men
 
 import unittest
 
-from tpotctl.tests import isolate
+from tpotctl.tests import AsyncTestCase, isolate
 
 isolate()
 
@@ -86,7 +86,7 @@ if textual:
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
-class PagesTest(unittest.IsolatedAsyncioTestCase):
+class PagesTest(AsyncTestCase):
 
     async def check_page(self, key, host=True, backend=None):
         app = tapp.TpotApp(backend=backend or FakeBackend(host=host), runner=Recorder(), engine=FakeEngine)
@@ -335,7 +335,7 @@ except ImportError:
 if textual:
     from tpotctl.tests.test_pickers import SettingsHelpersBase
 else:
-    SettingsHelpersBase = unittest.IsolatedAsyncioTestCase
+    SettingsHelpersBase = AsyncTestCase
 
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
@@ -399,7 +399,7 @@ class SettingsNavTest(SettingsHelpersBase):
 
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
-class ListSettingNavTest(unittest.IsolatedAsyncioTestCase):
+class ListSettingNavTest(AsyncTestCase):
     """The honeypot tab of a standard checkout, with the list setting COWRIE_PERSONA and its Choose."""
 
     async def test_honeypot_tab_every_control_reachable(self):
@@ -421,7 +421,7 @@ class ListSettingNavTest(unittest.IsolatedAsyncioTestCase):
 
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
-class ScreensTest(unittest.IsolatedAsyncioTestCase):
+class ScreensTest(AsyncTestCase):
     """Every dialog and screen of tpotctl/screens, on top of the menu as in tpot."""
 
     @staticmethod
@@ -552,7 +552,7 @@ class ScreensTest(unittest.IsolatedAsyncioTestCase):
 
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
-class AppsTest(unittest.IsolatedAsyncioTestCase):
+class AppsTest(AsyncTestCase):
     """The installer and the uninstaller run as apps of their own."""
 
     async def test_installer(self):
@@ -628,7 +628,7 @@ if __name__ == "__main__":
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
-class SyncRowsTest(unittest.IsolatedAsyncioTestCase):
+class SyncRowsTest(AsyncTestCase):
     """The tables of the Status and Images pages refresh without a jump (the containers table every 2 s
     flickered at the top while scrolled down)."""
 
@@ -700,7 +700,7 @@ class SyncRowsTest(unittest.IsolatedAsyncioTestCase):
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
-class DialogCardTest(unittest.IsolatedAsyncioTestCase):
+class DialogCardTest(AsyncTestCase):
     """A question is a card as large as its content, in the middle, with the safe answer focused (the
     quit dialog filled 90 % of the terminal for two lines of text)."""
 

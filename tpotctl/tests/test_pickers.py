@@ -12,7 +12,7 @@ import urllib.error
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from tpotctl.tests import isolate  # noqa: E402
+from tpotctl.tests import AsyncTestCase, isolate  # noqa: E402
 
 isolate()   # keeps the user's config out of the tests
 
@@ -260,10 +260,11 @@ def make_llm_checkout(test):
     return current_configuration(test, tmp.name)
 
 
-class SettingsHelpersBase(unittest.IsolatedAsyncioTestCase):
+class SettingsHelpersBase(AsyncTestCase):
     """The app of the settings tests on an LLM checkout, no tests of its own."""
 
     async def asyncSetUp(self):
+        await super().asyncSetUp()
         from tpotctl import app as tapp, events, ops, settings
         repo = self.repo = make_llm_checkout(self)
 

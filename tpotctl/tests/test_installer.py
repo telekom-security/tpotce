@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from tpotctl.tests import isolate  # noqa: E402
+from tpotctl.tests import AsyncTestCase, isolate  # noqa: E402
 
 isolate()   # keeps the user's config out of the tests
 
@@ -932,7 +932,7 @@ def all_ok():
 
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
-class AssistantTest(unittest.IsolatedAsyncioTestCase):
+class AssistantTest(AsyncTestCase):
 
     def make_app(self, sudo="password", checks=all_ok, password_state=lambda: True):
         from tpotctl.screens.install import InstallApp
@@ -1479,7 +1479,7 @@ class UninstallHandoverTest(unittest.TestCase):
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
-class UninstallScreenTest(unittest.IsolatedAsyncioTestCase):
+class UninstallScreenTest(AsyncTestCase):
 
     async def test_explicit_keep_sudo_rule_reaches_the_uninstaller(self):
         from tpotctl.screens.uninstall import UninstallApp

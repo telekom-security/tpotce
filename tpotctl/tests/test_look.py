@@ -8,7 +8,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from tpotctl.tests import isolate  # noqa: E402
+from tpotctl.tests import AsyncTestCase, isolate  # noqa: E402
 
 isolate()   # keeps the user's config out of the tests
 
@@ -276,7 +276,7 @@ class LogoTest(unittest.TestCase):
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
-class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
+class LookInTheAppTest(AsyncTestCase):
 
     def tearDown(self):
         glyphs.set_mode("unicode")
@@ -700,7 +700,7 @@ class AttacksWidgetTest(unittest.TestCase):
 
 @unittest.skipUnless(sys.modules.get("textual") or __import__("importlib").util.find_spec("textual"),
                      "Textual is not installed, run with the venv of tpot")
-class CreditTest(unittest.IsolatedAsyncioTestCase):
+class CreditTest(AsyncTestCase):
 
     async def header(self, width, branch="dev", kind="HIVE", machine=None, **status):
         """The header of a run at this width: (rule row, plate region, middle text, right text)."""
@@ -939,7 +939,7 @@ class ColoursPrefTest(unittest.TestCase):
 
 @unittest.skipUnless(sys.modules.get("textual") or __import__("importlib").util.find_spec("textual"),
                      "Textual is not installed, run with the venv of tpot")
-class ColoursTest(unittest.IsolatedAsyncioTestCase):
+class ColoursTest(AsyncTestCase):
     """Over SSH or in tmux the terminal says 256 colours: the T-Pot Manager brings a palette for it."""
 
     def setUp(self):

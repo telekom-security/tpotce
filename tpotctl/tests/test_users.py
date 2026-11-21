@@ -12,7 +12,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from tpotctl.tests import isolate  # noqa: E402
+from tpotctl.tests import AsyncTestCase, isolate  # noqa: E402
 
 isolate()   # keeps the user's config out of the tests
 
@@ -458,7 +458,7 @@ class FileOnlyTest(unittest.TestCase):
 
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
-class UsersPaneTest(unittest.IsolatedAsyncioTestCase):
+class UsersPaneTest(AsyncTestCase):
 
     async def test_add_and_remove(self):
         from tpotctl import app as tapp, ops

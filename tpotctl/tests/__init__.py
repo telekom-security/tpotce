@@ -1,8 +1,22 @@
 """Tests of tpotctl."""
 
+import asyncio
 import os
 import shutil
 import tempfile
+import unittest
+
+
+class AsyncTestCase(unittest.IsolatedAsyncioTestCase):
+    """IsolatedAsyncioTestCase for the Textual UI tests. Its loop runs in asyncio's debug mode, which logs
+    every step that takes longer than 0.1 s; mounting a Textual screen in a test takes that long, so the
+    limit is raised. The other checks of the debug mode stay."""
+
+    SLOW_CALLBACK = 5.0
+
+    async def asyncSetUp(self):
+        asyncio.get_running_loop().slow_callback_duration = self.SLOW_CALLBACK
+        await super().asyncSetUp()
 
 
 def isolate() -> None:

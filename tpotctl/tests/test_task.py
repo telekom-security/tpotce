@@ -3,7 +3,7 @@
 import os
 import unittest
 
-from tpotctl.tests import isolate
+from tpotctl.tests import AsyncTestCase, isolate
 
 isolate()
 
@@ -52,7 +52,7 @@ def host(screen):
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
-class TaskScreenTest(unittest.IsolatedAsyncioTestCase):
+class TaskScreenTest(AsyncTestCase):
 
     def setUp(self):
         FakeEngine.seen.clear()

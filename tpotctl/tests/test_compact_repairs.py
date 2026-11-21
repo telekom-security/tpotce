@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 from tpotctl.envfile import EnvFile
+from tpotctl.tests import AsyncTestCase
 
 try:
     import textual  # noqa: F401
@@ -50,7 +51,7 @@ if textual:
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
-class CompactRepairTest(unittest.IsolatedAsyncioTestCase):
+class CompactRepairTest(AsyncTestCase):
     def current(self):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)

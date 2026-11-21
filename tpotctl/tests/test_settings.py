@@ -10,7 +10,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from tpotctl.tests import isolate  # noqa: E402
+from tpotctl.tests import AsyncTestCase, isolate  # noqa: E402
 
 isolate()   # keeps the user's config out of the tests
 
@@ -373,7 +373,7 @@ class UnlockTest(unittest.TestCase):
 
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
-class SettingsPaneTest(unittest.IsolatedAsyncioTestCase):
+class SettingsPaneTest(AsyncTestCase):
 
     async def test_self_managed_warning_is_visible_without_opening_advanced_settings(self):
         from tpotctl import app as tapp
@@ -555,10 +555,11 @@ class LegacyPickerTest(unittest.TestCase):
 
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
-class ManyPickerTest(unittest.IsolatedAsyncioTestCase):
+class ManyPickerTest(AsyncTestCase):
     """COWRIE_PERSONA on the Settings page: Choose opens the list to tick, Servers and Devices."""
 
     async def asyncSetUp(self):
+        await super().asyncSetUp()
         from tpotctl import app as tapp
         self.repo = make_checkout(self)
         self.app = tapp.TpotApp(backend=standard_backend(self.repo), runner=lambda command, cwd=None: 0)

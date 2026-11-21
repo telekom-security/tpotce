@@ -11,7 +11,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from tpotctl.tests import isolate  # noqa: E402
+from tpotctl.tests import AsyncTestCase, isolate  # noqa: E402
 
 isolate()   # keeps the user's config out of the tests
 
@@ -304,7 +304,7 @@ class BackendConfigFreshnessTest(unittest.TestCase):
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
-class OverviewTest(unittest.IsolatedAsyncioTestCase):
+class OverviewTest(AsyncTestCase):
     def backend(self):
         backend = FakeBackend()
         backend.containers = lambda: [
@@ -389,7 +389,7 @@ class OverviewTest(unittest.IsolatedAsyncioTestCase):
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
-class MenuTest(unittest.IsolatedAsyncioTestCase):
+class MenuTest(AsyncTestCase):
 
     def setUp(self):
         from tpotctl.tests import current_configuration
@@ -2357,7 +2357,7 @@ def sample_check(**over):
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
-class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
+class ChecksPageTest(AsyncTestCase):
     """The Checks page: the switches, the question, tpot check in the task screen, the table of last.json."""
 
     SIZE = (150, 50)
@@ -2714,7 +2714,7 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
-class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
+class KibanaObjectsPageTest(AsyncTestCase):
     """The Kibana objects on the Elastic page: the state, the mode, Export, Update, Overwrite all, Restore."""
 
     SIZE = (120, 60)
@@ -3293,7 +3293,7 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
-class CustomizerScreenTest(unittest.IsolatedAsyncioTestCase):
+class CustomizerScreenTest(AsyncTestCase):
 
     def make_app(self, selection):
         self.catalog = core.Catalog()
