@@ -1730,9 +1730,16 @@ def run_sensor_cert(args, registry, console) -> int:
             return 0
         reachable = [s for s in chosen if s.host and s.ssh_user and s.access]
         for sensor in chosen:
-            if sensor not in reachable:
-                console.print(Text(f"{sensor.name} is skipped, add where it is: tpot sensors set {sensor.name} "
-                                   f"--host ... --ssh-user ...", style="yellow"))
+            if sensor in reachable:
+                continue
+            # sensors set adds where a sensor is, never its access
+            if not sensor.access:
+                hint = (f"{sensor.name} is skipped, it has no access to this HIVE: tpot sensors import takes its "
+                        f"line of lswebpasswd over where T-Pot keeps one, else tpot sensors add deploys it again")
+            else:
+                hint = (f"{sensor.name} is skipped, add where it is: tpot sensors set {sensor.name} "
+                        f"--host ... --ssh-user ...")
+            console.print(Text(hint, style="yellow"))
         failed = {s.name for s in copy_certificate(reachable, not args.no_become_pass)} if reachable else set()
         reached = [s.name for s in reachable if s.name not in failed]
         if reached:

@@ -18,7 +18,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from tpotctl.tests import isolate  # noqa: E402
+from tpotctl.tests import AsyncTestCase, isolate  # noqa: E402
 
 isolate()   # keeps the user's config out of the tests
 
@@ -262,7 +262,7 @@ class HelpersTest(unittest.TestCase):
 
     def test_tpotinit_issues_the_same_key(self):
         # tpotinit's first start and tpot sensors cert --renew issue the certificate of the HIVE alike
-        with open(os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "entrypoint.sh")) as handle:
+        with open(os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "entrypoint.sh"), encoding="utf-8") as handle:
             script = handle.read()
         start = script.index("openssl req")
         end = re.compile(r"[^\\]\n").search(script, start).end()
@@ -294,7 +294,7 @@ class HelpersTest(unittest.TestCase):
         # the probe asks for the SENSOR's login after a limit per address, a missing or wrong one gets
         # 401 with a marker of its own (no WWW-Authenticate): an old HIVE answers a plain 401
         conf = os.path.join(REPO_DIR, "docker", "nginx", "dist", "conf")
-        with open(os.path.join(conf, "lsweb.conf")) as handle:
+        with open(os.path.join(conf, "lsweb.conf"), encoding="utf-8") as handle:
             text = handle.read()
 
         def block(start):
@@ -312,12 +312,12 @@ class HelpersTest(unittest.TestCase):
         self.assertIn("more_clear_headers WWW-Authenticate;", login)
         self.assertIn("add_header X-TPot-Ingest login always;", login)
         for name in ("lsweb.conf", "tpotweb.conf"):
-            with open(os.path.join(conf, name)) as handle:
+            with open(os.path.join(conf, name), encoding="utf-8") as handle:
                 server = handle.read()
             self.assertIn("ssl_ecdh_curve X25519MLKEM768:X25519:secp384r1;", server, name)
             self.assertNotIn("ssl_dhparam", server, name)
         self.assertFalse(os.path.exists(os.path.join(conf, "ssl")))
-        with open(os.path.join(REPO_DIR, "docker", "nginx", "Dockerfile")) as handle:
+        with open(os.path.join(REPO_DIR, "docker", "nginx", "Dockerfile"), encoding="utf-8") as handle:
             self.assertNotIn("ssl", handle.read())
 
 
@@ -362,7 +362,7 @@ class CertificateTest(unittest.TestCase):
         crt = os.path.join(self.tmp, "nginx.crt")
         with open(crt, "w") as out:
             for name in ("leaf.crt", "root.crt"):
-                with open(os.path.join(self.tmp, name)) as handle:
+                with open(os.path.join(self.tmp, name), encoding="utf-8") as handle:
                     out.write(handle.read())
         info = sensors.cert_info(crt)
         self.assertFalse(info.self_signed)                          # the root after it does not count
@@ -1643,7 +1643,11 @@ class CliTest(unittest.TestCase):
         code, text, children, _folders = self.distribute()
         self.assertEqual(code, 1, text)
         self.assertEqual(children, [])                                      # none to reach: no playbook
-        for name in ("sensor-new-bat", "sensor-old-lynx", "sensor-old-otter"):     # no access, no host
+        # no access: sensors set would not give it, import or add again do
+        self.assertIn("sensor-new-bat is skipped, it has no access to this HIVE: tpot sensors import takes its "
+                      "line of lswebpasswd over where T-Pot keeps one, else tpot sensors add deploys it again", text)
+        self.assertNotIn("tpot sensors set sensor-new-bat", text)
+        for name in ("sensor-old-lynx", "sensor-old-otter"):                       # access, no host
             self.assertIn(f"{name} is skipped, add where it is: tpot sensors set {name} --host ... "
                           f"--ssh-user ...", text)
         self.assertIn(by_hand.format("sensor-new-bat, sensor-old-lynx, sensor-old-otter"), text)
@@ -1670,6 +1674,7 @@ class CliTest(unittest.TestCase):
                 self.assertNotIn("the new certificate.", text)
                 self.assertIn(by_hand.format("sensor-new-bat, sensor-new-fox, sensor-new-owl, sensor-old-lynx, "
                                              "sensor-old-otter"), text)
+                self.assertTrue(folders[0][0])                              # a folder was handed in
                 self.assertFalse(folders[0][0] and os.path.exists(folders[0][0]))
 
         code, text, _children, _folders = self.distribute()                # copied, the skipped ones by hand
@@ -1847,7 +1852,7 @@ class CliTest(unittest.TestCase):
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
-class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
+class SensorsPaneTest(AsyncTestCase):
 
     def setUp(self):
         patch = mock.patch.object(sensors, "delete_status", return_value=None)
@@ -3088,10 +3093,12 @@ class DeployComposeTest(unittest.TestCase):
         with open(self.compose, "w", encoding="utf-8") as handle:
             handle.write(text)
         out = self.run_task().splitlines()
-        self.assertEqual(out[0].split()[0], "rebuilt-kept")
-        # the warning names stdout_lines[1], Ansible's splitlines() of stdout
-        path = out[1]
-        self.assertEqual(os.path.dirname(path), os.path.join(home, "tpot_backups"))
+        # the warning names stdout_lines[1], Ansible's splitlines() of stdout: the whole path, space and all
+        backups = os.path.join(home, "tpot_backups")
+        kept = os.listdir(backups)
+        self.assertEqual(len(kept), 1, kept)
+        path = os.path.join(backups, kept[0])
+        self.assertEqual(out, ["rebuilt-kept", path])
         self.assertEqual(self.read(path), text)
 
     def test_comment_lines_without_a_backup_keep_the_file(self):
@@ -3220,7 +3227,8 @@ class SensorCertPlayTest(unittest.TestCase):
         self.assertIn("'logstash'notintpot_services", condition)
 
     def test_sensor_cert_reads_the_sensor_itself(self):
-        text = open(self.PLAY, encoding="utf-8").read()
+        with open(self.PLAY, encoding="utf-8") as handle:
+            text = handle.read()
         self.assertIn("{{ ansible_facts.user_dir }}/tpotce/version", text)
         self.assertIn("TPOT_DOCKER_COMPOSE", text)
         self.assertNotIn(sensors.SHIPPER_SINCE, text)        # only sensors.py names the release
