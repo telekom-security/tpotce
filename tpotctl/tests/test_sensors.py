@@ -1306,7 +1306,7 @@ class CliTest(unittest.TestCase):
         popen, children = fake_popen(*steps)
         with mock.patch.object(sensors, "check_ssh", return_value=ssh), \
                 mock.patch.object(sensors, "has_ssh_key", return_value=True), \
-                mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.1.2"]), \
+                mock.patch.object(sensors, "cert_info", return_value=cert(["IP:192.168.1.2"])), \
                 mock.patch.object(sensors, "new_password", return_value="Pw-of-the-sensor-1234"), \
                 mock.patch.object(sensors, "default_hive_address", return_value="192.168.1.2"), \
                 mock.patch("subprocess.Popen", side_effect=popen):
@@ -1392,7 +1392,7 @@ class CliTest(unittest.TestCase):
             child.wait = wait_then_ctrl_c
             return child
         with mock.patch.object(sensors, "check_ssh", return_value="ok"), \
-                mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.1.2"]), \
+                mock.patch.object(sensors, "cert_info", return_value=cert(["IP:192.168.1.2"])), \
                 mock.patch.object(sensors, "default_hive_address", return_value="192.168.1.2"), \
                 mock.patch("subprocess.Popen", side_effect=late_popen):
             code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
@@ -1447,7 +1447,7 @@ class CliTest(unittest.TestCase):
         popen, children = fake_popen(0)
         with mock.patch.object(sensors, "check_ssh", return_value="key"), \
                 mock.patch.object(sensors, "has_ssh_key", return_value=True), \
-                mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.1.2"]), \
+                mock.patch.object(sensors, "cert_info", return_value=cert(["IP:192.168.1.2"])), \
                 mock.patch.object(sensors, "default_hive_address", return_value="192.168.1.2"), \
                 mock.patch("subprocess.Popen", side_effect=popen):
             code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
@@ -1468,7 +1468,7 @@ class CliTest(unittest.TestCase):
     def test_add_grants_first_and_takes_back_on_failure(self):
         popen, children = fake_popen(0)
         with mock.patch.object(sensors, "check_ssh", return_value="ok"), \
-                mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.1.2"]), \
+                mock.patch.object(sensors, "cert_info", return_value=cert(["IP:192.168.1.2"])), \
                 mock.patch.object(sensors, "default_hive_address", return_value="192.168.1.2"), \
                 mock.patch("subprocess.Popen", side_effect=popen):
             code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
@@ -1485,7 +1485,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(base64.b64decode(kwargs["env"]["myTPOT_HIVE_USER"]).decode(),
                          f"{deployed[0].name}:{password}")
         with mock.patch.object(sensors, "check_ssh", return_value="ok"), \
-                mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.1.2"]), \
+                mock.patch.object(sensors, "cert_info", return_value=cert(["IP:192.168.1.2"])), \
                 mock.patch.object(sensors, "default_hive_address", return_value="192.168.1.2"), \
                 mock.patch("subprocess.Popen", side_effect=fake_popen(2)[0]):
             code, text = self.run_cli("sensors", "add", "--host", "10.0.0.6", "--ssh-user", "debian",
@@ -1494,16 +1494,23 @@ class CliTest(unittest.TestCase):
         self.assertIn("taken back", text)
         self.assertEqual(len(sensors.Registry(self.repo).entries()), 3)      # 2 migrated + 1 deployed
 
-    def add_renewing(self, linux=True, restart_code=0, note=None):
-        """sensors add --yes with a certificate that lacks the hive address; the steps in their order."""
-        from tpotctl import cli, ops
+    def add_renewing(self, info=None, reload="reloaded", note=None):
+        """sensors add --yes with nginx.crt as `info` (by default one that lacks the hive address) and
+        nginx_reload giving `reload`; the steps in their order. nginx.crt is read once."""
+        from tpotctl import ops
         steps = []
         popen, _children = fake_popen(0)
         grant = self.Registry.grant
 
-        def call(argv, **_kwargs):
-            steps.append("restart" if argv == ops.service_command("restart") else argv)
-            return restart_code
+        def renewed(_registry, sans):
+            steps.append(("renew", sans))
+            return "20261120-120000"
+
+        def reloaded():
+            steps.append("reload")
+            if isinstance(reload, Exception):
+                raise reload
+            return reload
 
         def deploy(command, **kwargs):
             steps.append("deploy")
@@ -1514,46 +1521,69 @@ class CliTest(unittest.TestCase):
             granted_note = grant(registry, *args, **kwargs)
             return granted_note if note is None else note
 
+        cert_info = mock.Mock(return_value=info or cert(["IP:192.168.5.15"]))
         with mock.patch.object(sensors, "check_ssh", return_value="ok"), \
-                mock.patch.object(sensors, "cert_sans", return_value=[]), \
-                mock.patch.object(sensors, "renew_cert", side_effect=lambda *_a: steps.append("renew") or "stamp"), \
+                mock.patch.object(sensors, "cert_info", cert_info), \
+                mock.patch.object(sensors, "renew_cert", side_effect=renewed), \
                 mock.patch.object(sensors, "default_hive_address", return_value="192.168.1.2"), \
                 mock.patch.object(self.Registry, "grant", granted), \
-                mock.patch.object(cli, "linux_host_ok", return_value=linux), \
-                mock.patch.object(cli, "call", side_effect=call), \
+                mock.patch.object(ops, "nginx_reload", side_effect=reloaded), \
+                mock.patch.object(ops, "service_command", side_effect=AssertionError("T-Pot is not restarted")), \
                 mock.patch("subprocess.Popen", side_effect=deploy):
             code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
                                       "--hive-address", "192.168.1.2", "--yes")
+        self.assertEqual(cert_info.call_count, 1, "nginx.crt is read once")
         return code, text, steps
 
-    def test_add_renews_grants_then_restarts_once(self):
-        code, text, steps = self.add_renewing(note="nginx takes it after a restart")
+    def test_add_renews_and_reloads_before_the_grant(self):
+        """nginx reads lswebpasswd per request: a reload before the grant takes nothing of the access."""
+        code, text, steps = self.add_renewing()
         self.assertEqual(code, 0, text)
-        self.assertEqual(steps, ["renew", "grant", "restart", "deploy"])
-        self.assertNotIn("next start of T-Pot", text)           # the restart of this run covers the access
-        self.assertIn("and sends to 192.168.1.2.", text)
+        self.assertEqual(steps, [("renew", ["IP:192.168.5.15", "IP:192.168.1.2"]), "reload", "grant", "deploy"])
+        self.assertIn("is deployed to 10.0.0.5 and sends to 192.168.1.2.", flat(text))
+        self.assertNotIn("tpot restart", text)
+        self.assertIn("Remember: sensor-old-lynx, sensor-old-otter need the new certificate as well: "
+                      "tpot sensors cert --distribute", flat(text))
 
-    def test_add_renewed_without_restart_says_when_it_sends(self):
-        for kwargs in ({"linux": False}, {"restart_code": 1}):
-            with self.subTest(**kwargs):
-                code, text, _steps = self.add_renewing(**kwargs)
-                self.assertEqual(code, 0, text)
-                self.assertIn("is deployed to 10.0.0.5, it sends to 192.168.1.2 from the next start of T-Pot on "
-                              "(tpot restart).", text)
-                self.assertNotIn("and sends to", text)
-
-    def test_add_without_restart_warns(self):
-        code, text, steps = self.add_renewing(linux=False, note="nginx takes it after a restart")
+    def test_add_renewed_without_a_reload_says_when_it_sends(self):
+        code, text, steps = self.add_renewing(reload="not running")
         self.assertEqual(code, 0, text)
-        self.assertEqual(steps, ["renew", "grant", "deploy"])
-        self.assertIn("nginx uses the new certificate after: tpot restart", text)
-        self.assertIn("next start of T-Pot", text)
+        self.assertEqual(steps[1:], ["reload", "grant", "deploy"])
+        self.assertIn("nginx is not running, T-Pot uses the new certificate from its next start on.", flat(text))
+        self.assertIn("is deployed to 10.0.0.5, it sends to 192.168.1.2 from the next start of T-Pot on "
+                      "(tpot restart).", flat(text))
+        self.assertNotIn("and sends to", text)
 
-    def test_add_restart_failure_goes_on(self):
-        code, text, steps = self.add_renewing(restart_code=1)
+    def test_add_with_an_access_after_a_restart_says_so(self):
+        """lswebpasswd could not be written in place: the reload of nginx does not bring the access."""
+        code, text, steps = self.add_renewing(note="it counts from the next start of T-Pot on (tpot restart)")
         self.assertEqual(code, 0, text)
-        self.assertEqual(steps, ["renew", "grant", "restart", "deploy"])
-        self.assertIn("sudo systemctl restart tpot.service", text)
+        self.assertEqual(steps[1:], ["reload", "grant", "deploy"])
+        self.assertIn("is deployed to 10.0.0.5. nginx takes its access from the next start of T-Pot on "
+                      "(tpot restart), it sends to 192.168.1.2 after that.", flat(text))
+        self.assertNotIn("and sends to", text)
+
+    def test_add_stops_before_the_grant_when_nginx_refuses_the_certificate(self):
+        from tpotctl import ops
+        code, text, steps = self.add_renewing(reload=ops.OpsError("nginx: [emerg] cannot load certificate"))
+        self.assertEqual(code, 1, text)
+        self.assertEqual(steps[1:], ["reload"])                             # no grant, no deployment
+        self.assertIn("nginx does not take the new certificate (nginx: [emerg] cannot load certificate)",
+                      flat(text))
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
+
+    def test_add_with_a_ca_certificate_stops_before_the_grant(self):
+        code, text, steps = self.add_renewing(info=cert(["DNS:hive.example.org"], self_signed=False))
+        self.assertEqual(code, 1, text)
+        self.assertEqual(steps, [])                                         # not renewed, nothing granted
+        self.assertIn("The certificate of this HIVE is issued by Example Root CA and does not cover 192.168.1.2; "
+                      "reissue it at that CA with this address, or give --hive-address with an address it "
+                      "covers (DNS:hive.example.org).", flat(text))
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
+        code, text, steps = self.add_renewing(info=cert(["IP:192.168.1.2"], self_signed=False))
+        self.assertEqual(code, 0, text)                                     # one that covers it is fine
+        self.assertEqual(steps, ["grant", "deploy"])
+        self.assertIn("is deployed to 10.0.0.5 and sends to 192.168.1.2.", flat(text))
 
     def test_add_stops_without_ssh_and_with_uncovered_certificate(self):
         with mock.patch.object(sensors, "check_ssh", return_value="unreachable"):
@@ -1562,22 +1592,93 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("cannot log in", text)
         with mock.patch.object(sensors, "check_ssh", return_value="ok"), \
-                mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.5.15"]):
+                mock.patch.object(sensors, "cert_info", return_value=cert(["IP:192.168.5.15"])):
             code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
                                       "--hive-address", "192.168.1.2")
         self.assertNotEqual(code, 0)
         self.assertIn("does not cover 192.168.1.2", text)
+        unreadable = sensors.SensorsError("cannot read the certificate nginx.crt: Could not find certificate")
+        with mock.patch.object(sensors, "check_ssh", return_value="ok"), \
+                mock.patch.object(sensors, "cert_info", side_effect=unreadable), \
+                mock.patch.object(sensors, "renew_cert", side_effect=AssertionError("not replaced")):
+            code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
+                                      "--hive-address", "192.168.1.2", "--yes")
+        self.assertEqual(code, 1, text)
+        self.assertIn("cannot read the certificate nginx.crt", text)
+        self.assertNotIn("Traceback", text)
         self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)     # nothing granted
 
-    def test_cert_distribute(self):
-        registry = sensors.Registry(self.repo)
-        registry.record(sensors.Sensor("sensor-new-fox", host="10.0.0.5", ssh_user="debian", source="deployed"))
-        popen, children = fake_popen(0)
+    def distribute(self, *names, code=0, retry=None):
+        """tpot sensors cert --distribute NAMES with a playbook that writes `retry` into its sensor_cert.retry
+        (None: no file) and ends with `code`; the output without Rich's line breaks, its children and, per
+        child, the retry folder, ANSIBLE_RETRY_FILES_ENABLED and the mode of the folder it was given."""
+        children, folders = [], []
+
+        def popen(command, **kwargs):
+            env = kwargs.get("env") or {}
+            folder = env.get("ANSIBLE_RETRY_FILES_SAVE_PATH")
+            folders.append((folder, env.get("ANSIBLE_RETRY_FILES_ENABLED"),
+                            os.stat(folder).st_mode & 0o777 if folder else None))
+            if folder and retry is not None:
+                with open(os.path.join(folder, "sensor_cert.retry"), "w", encoding="utf-8") as handle:
+                    handle.write("".join(f"{name}\n" for name in retry))
+            children.append(Child(command, kwargs, [code]))
+            return children[-1]
         with mock.patch.object(sensors, "cert_info", return_value=cert(["IP:192.168.5.15"])), \
                 mock.patch("subprocess.Popen", side_effect=popen):
-            code, text = self.run_cli("sensors", "cert", "--distribute")
-        self.assertIn("skipped", text)                                        # migrated ones have no host
-        self.assertEqual(code, 1)                                             # sensor-new-fox has no access
+            exit_code, text = self.run_cli("sensors", "cert", "--distribute", *names)
+        return exit_code, flat(text), children, folders
+
+    def test_cert_distribute(self):
+        """The sensors it does not reach (skipped, or named in Ansible's retry file) get the way by hand."""
+        registry = sensors.Registry(self.repo)
+        registry.record(sensors.Sensor("sensor-new-bat", host="10.0.0.4", ssh_user="debian", source="deployed"))
+        by_hand = ("By hand for {}: copy " + registry.cert + " of this HIVE to ~/tpotce/data/hive.crt on the "
+                   "sensor, then restart T-Pot there (sudo systemctl restart tpot).")
+        code, text, children, _folders = self.distribute()
+        self.assertEqual(code, 1, text)
+        self.assertEqual(children, [])                                      # none to reach: no playbook
+        for name in ("sensor-new-bat", "sensor-old-lynx", "sensor-old-otter"):     # no access, no host
+            self.assertIn(f"{name} is skipped, add where it is: tpot sensors set {name} --host ... "
+                          f"--ssh-user ...", text)
+        self.assertIn(by_hand.format("sensor-new-bat, sensor-old-lynx, sensor-old-otter"), text)
+        for name, host in (("sensor-new-fox", "10.0.0.5"), ("sensor-new-owl", "10.0.0.6")):
+            registry.grant(name, "pw")
+            registry.record(sensors.Sensor(name, host=host, ssh_user="debian", source="deployed"))
+
+        code, text, children, folders = self.distribute(code=2, retry=["sensor-new-owl"])
+        self.assertEqual(code, 1, text)
+        self.assertEqual(len(children), 1, text)
+        self.assertEqual(children[0].args[0], "ansible-playbook")
+        env = children[0].kwargs.get("env") or {}
+        folder, enabled, mode = folders[0]
+        self.assertEqual((enabled, mode), ("True", 0o700))                  # a private folder
+        self.assertEqual(env.get("PATH"), os.environ.get("PATH"))           # the environment with the two keys
+        self.assertFalse(os.path.exists(folder))                            # removed afterwards
+        self.assertIn("sensor-new-fox has the new certificate.", text)
+        self.assertNotIn("sensor-new-owl has", text)
+        self.assertIn(by_hand.format("sensor-new-bat, sensor-new-owl, sensor-old-lynx, sensor-old-otter"), text)
+        for retry in (None, ["sensor-not-in-the-play"]):            # no file, or none of them: all failed
+            with self.subTest(retry=retry):
+                code, text, _children, folders = self.distribute(code=4, retry=retry)
+                self.assertEqual(code, 1, text)
+                self.assertNotIn("the new certificate.", text)
+                self.assertIn(by_hand.format("sensor-new-bat, sensor-new-fox, sensor-new-owl, sensor-old-lynx, "
+                                             "sensor-old-otter"), text)
+                self.assertFalse(folders[0][0] and os.path.exists(folders[0][0]))
+
+        code, text, _children, _folders = self.distribute()                # copied, the skipped ones by hand
+        self.assertEqual(code, 0, text)
+        self.assertIn("sensor-new-fox, sensor-new-owl have the new certificate.", text)
+        self.assertIn(by_hand.format("sensor-new-bat, sensor-old-lynx, sensor-old-otter"), text)
+        code, text, _children, _folders = self.distribute("sensor-new-fox", "sensor-new-owl")
+        self.assertEqual(code, 0, text)
+        self.assertIn("sensor-new-fox, sensor-new-owl have the new certificate.", text)
+        self.assertNotIn("By hand", text)
+        with mock.patch.object(self.Registry, "sensors", return_value=[]):
+            code, text, children, _folders = self.distribute()
+        self.assertEqual(code, 0, text)
+        self.assertIn("No sensors are registered, there is nothing to copy.", text)
         self.assertEqual(children, [])
 
     def test_ctrl_c_during_the_distribution_is_cancelled(self):
@@ -1593,6 +1694,9 @@ class CliTest(unittest.TestCase):
         self.assertNotIn("Traceback", text)
         inventory = children[0].args[children[0].args.index("-i") + 1]
         self.assertFalse(os.path.exists(inventory))                           # the inventory goes as well
+        folder = (children[0].kwargs.get("env") or {}).get("ANSIBLE_RETRY_FILES_SAVE_PATH")
+        self.assertTrue(folder)
+        self.assertFalse(os.path.exists(folder))                              # and the retry folder
 
     def cert_cli(self, *args, info=None, reload="reloaded", stdin=None, error=None):
         """tpot sensors cert ... with nginx.crt as `info`; the renew steps in their order."""
@@ -1615,6 +1719,7 @@ class CliTest(unittest.TestCase):
                 mock.patch.object(ops, "nginx_reload", side_effect=reloaded), \
                 mock.patch.object(ops, "service_command", side_effect=AssertionError("T-Pot is not restarted")):
             code, text = self.run_cli("sensors", "cert", *args, stdin=stdin)
+        self.assertLessEqual(cert_info.call_count, 1, "nginx.crt is read once")
         return code, text, steps
 
     def test_cert_shows_the_certificate(self):

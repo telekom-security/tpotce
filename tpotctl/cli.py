@@ -1664,12 +1664,12 @@ def run_sudo(args, registry=None) -> int:
 CERT_RENEW = "tpot sensors cert --renew --distribute"
 
 
-def renew_certificate(registry, addresses, console, yes: bool, reload: bool) -> str:
-    """Issues the certificate of this HIVE anew for its addresses and `addresses`; only for a self-signed or
-    a missing one (the callers check). "" declined or failed, else "reloaded", "not running" (nginx takes it
-    at the next start) or "not reloaded" (without `reload`, the caller says when nginx takes it)."""
+def renew_certificate(registry, addresses, console, yes: bool, reload: bool, *, current: List[str]) -> str:
+    """Issues the certificate of this HIVE anew for `current` (the SANs of the one the caller read) and
+    `addresses`; only for a self-signed or a missing one (the callers check). "" declined or failed, else
+    "reloaded", "not running" (nginx takes it at the next start) or "not reloaded" (without `reload`, the
+    caller says when nginx takes it)."""
     from tpotctl import sensors as tsensors
-    current = tsensors.cert_sans(registry.cert)
     sans = list(dict.fromkeys(current + [tsensors.san_of(a) for a in addresses]))
     console.print(f"The new certificate covers: {', '.join(sans)}")
     if not confirm("Issue the certificate of this HIVE anew (ECDSA P-384)? Browsers warn about it once more, "
@@ -1690,10 +1690,6 @@ def renew_certificate(registry, addresses, console, yes: bool, reload: bool) -> 
     else:
         say.warn("nginx is not running, T-Pot uses the new certificate from its next start on.", console.file)
     return state
-
-
-def linux_host_ok() -> bool:
-    return ops.linux_host()
 
 
 def run_sensor_cert(args, registry, console) -> int:
@@ -1717,7 +1713,7 @@ def run_sensor_cert(args, registry, console) -> int:
         if not sans and not addresses:
             error("the new certificate would cover no address of this HIVE, give one with --add")
             return 2
-        state = renew_certificate(registry, addresses, console, args.yes, not args.no_restart)
+        state = renew_certificate(registry, addresses, console, args.yes, not args.no_restart, current=sans)
         if not state:
             return 1
         if state == "not reloaded":
@@ -1729,21 +1725,50 @@ def run_sensor_cert(args, registry, console) -> int:
             error(f"there is no certificate to copy, {CERT_RENEW} issues one and copies it")
             return 1
         chosen = [registry.get(n) for n in args.distribute] if args.distribute else registry.sensors()
+        if not chosen:
+            say.info("No sensors are registered, there is nothing to copy.", console.file)
+            return 0
         reachable = [s for s in chosen if s.host and s.ssh_user and s.access]
         for sensor in chosen:
             if sensor not in reachable:
                 console.print(Text(f"{sensor.name} is skipped, add where it is: tpot sensors set {sensor.name} "
                                    f"--host ... --ssh-user ...", style="yellow"))
-        if not reachable:
+        failed = {s.name for s in copy_certificate(reachable, not args.no_become_pass)} if reachable else set()
+        reached = [s.name for s in reachable if s.name not in failed]
+        if reached:
+            say.ok(f"{', '.join(reached)} {'has' if len(reached) == 1 else 'have'} the new certificate.",
+                   console.file)
+        missed = [s.name for s in chosen if s.name not in reached]
+        if missed:
+            say.warn(f"By hand for {', '.join(missed)}: copy {registry.cert} of this HIVE to ~/tpotce/data/hive.crt "
+                     f"on the sensor, then restart T-Pot there (sudo systemctl restart tpot).", console.file)
+        # skipped ones alone end with 0: the playbook reached every sensor it was given
+        if failed or not reachable:
             return 1
-        with tempfile_inventory(tsensors.inventory_text(reachable)) as inventory:
-            code = call(tsensors.distribute_command(inventory, not args.no_become_pass), cwd=REPO_DIR)
-        if code != 0:
-            error("the certificate could not be copied to all sensors, see above")
-            return 1
-        names = ", ".join(s.name for s in reachable)
-        say.ok(f"{names} {'has' if len(reachable) == 1 else 'have'} the new certificate.", console.file)
     return 0
+
+
+def copy_certificate(sensors, become_pass: bool) -> list:
+    """sensor_cert.yml for `sensors`; the ones it did not reach. Ansible names the hosts that failed or were
+    unreachable in its retry file (the inventory names are sensor names); a failed run without one, or with
+    none of them, counts for all."""
+    import shutil
+    import tempfile
+    from tpotctl import sensors as tsensors
+    folder = tempfile.mkdtemp(prefix="tpot-sensors-")
+    try:
+        env = dict(os.environ, ANSIBLE_RETRY_FILES_ENABLED="True", ANSIBLE_RETRY_FILES_SAVE_PATH=folder)
+        with tempfile_inventory(tsensors.inventory_text(sensors)) as inventory:
+            if call(tsensors.distribute_command(inventory, become_pass), cwd=REPO_DIR, env=env) == 0:
+                return []
+        try:
+            with open(os.path.join(folder, "sensor_cert.retry"), encoding="utf-8", errors="replace") as handle:
+                names = set(handle.read().split())
+        except OSError:
+            names = set()
+        return [s for s in sensors if s.name in names] or list(sensors)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 class tempfile_inventory:
@@ -1806,19 +1831,24 @@ def run_sensor_add(args, registry, console) -> int:
         return 1
     say.ok(f"SSH to {user}@{host} works.", console.file)
 
-    # 2. the sensor checks this HIVE against its certificate; T-Pot restarts only after the grant (step 3),
-    # a restart before it would leave nginx without the access of the new sensor
-    restart = renewed = False
-    if not tsensors.covers(hive, tsensors.cert_sans(registry.cert)):
+    # 2. the sensor checks this HIVE against its certificate. A reload of nginx before the grant (step 3)
+    # takes nothing of the access: nginx reads lswebpasswd per request. A certificate that cannot be read
+    # ends the command (SensorsError, exit 1).
+    info = tsensors.cert_info(registry.cert)
+    sans = info.sans if info else []
+    renewed = ""
+    if not tsensors.covers(hive, sans):
+        if info and not info.self_signed:
+            error(f"The certificate of this HIVE is issued by {info.issuer} and does not cover {hive}; reissue "
+                  f"it at that CA with this address, or give --hive-address with an address it covers "
+                  f"({', '.join(sans) or 'none'}).")
+            return 1
         console.print(Text(f"The certificate of this HIVE does not cover {hive}, the sensor would not trust it.",
                            style="yellow"))
-        if not renew_certificate(registry, registry.hive_addresses() + [hive], console, args.yes, False):
+        renewed = renew_certificate(registry, registry.hive_addresses() + [hive], console, args.yes, True,
+                                    current=sans)
+        if not renewed:
             return 1
-        renewed = True
-        restart = linux_host_ok() and confirm(
-            "Restart T-Pot after the access is granted, so that nginx uses the new certificate?", args.yes)
-        if not restart:
-            say.warn("nginx uses the new certificate after: tpot restart", console.file)
         others = [s.name for s in registry.sensors()]
         if others:
             console.print(Text(f"Remember: {', '.join(others)} need the new certificate as well: "
@@ -1844,13 +1874,7 @@ def run_sensor_add(args, registry, console) -> int:
     with bootstrap.sigint_to(lambda signum, _frame: interrupts.append(signum)):
         note = registry.grant(name, password)
         code = None
-        restarted = False
         try:
-            if restart and not interrupts:
-                restarted = call(ops.service_command("restart")) == 0
-                if not restarted:
-                    say.warn("T-Pot could not be restarted, nginx uses the new certificate after: "
-                             "sudo systemctl restart tpot.service", console.file)
             if not interrupts:
                 console.print(f"Deploying {name} to {host}, this reboots the sensor.")
                 proc = subprocess.Popen(tsensors.deploy_command(host, user, not args.no_become_pass, port=port),
@@ -1880,12 +1904,12 @@ def run_sensor_add(args, registry, console) -> int:
             say.warn(f"{name} could not be noted ({err}), its access stays. Add where it is with: "
                      f"tpot sensors set {name} --host {host} --ssh-user {user} --ssh-port {port} "
                      f"--hive-address {hive}", console.file)
-    # lswebpasswd could not be written in place, nginx refuses it until a restart (none of this run's)
-    if "restart" in note and not restarted:
+    # lswebpasswd could not be written in place, nginx refuses it until a restart
+    if "restart" in note:
         say.warn(f"{name} is deployed to {host}. nginx takes its access from the next start of T-Pot on "
                  f"(tpot restart), it sends to {hive} after that.", console.file)
-    # the renewed certificate reaches nginx only with a restart this run did not make
-    elif renewed and not restarted:
+    # nginx was not running: the renewed certificate counts from its next start
+    elif renewed and renewed != "reloaded":
         say.warn(f"{name} is deployed to {host}, it sends to {hive} from the next start of T-Pot on "
                  f"(tpot restart).", console.file)
     else:
