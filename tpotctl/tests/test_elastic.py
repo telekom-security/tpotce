@@ -604,6 +604,25 @@ def unreadable_plan(value="30"):
     return elastic.plan(value, opener=es, now=NOW)
 
 
+class HttpErrorClosureTest(unittest.TestCase):
+    """HTTP errors from Elasticsearch release their response bodies."""
+
+    def test_get_policy_closes_404_response_without_changing_http_errors(self):
+        def opener_for(error):
+            def opener(request, timeout=None):
+                raise error
+            return opener
+
+        with self.assertRaisesRegex(elastic.ElasticError, "answered 500 for the ILM policy tpot"):
+            elastic.get_policy(opener=opener_for(urllib.error.HTTPError(
+                elastic.ES_URL + "/_ilm/policy/tpot", 500, "err", {}, io.BytesIO(b""))))
+
+        body = io.BytesIO(b"")
+        not_found = urllib.error.HTTPError(elastic.ES_URL + "/_ilm/policy/tpot", 404, "err", {}, body)
+        self.assertIsNone(elastic.get_policy(opener=opener_for(not_found)))
+        self.assertTrue(body.closed)
+
+
 class FailuresCountTest(unittest.TestCase):
     """The failures of the last hours in tpot-failures-* (Logstash's parse and index failures)."""
 

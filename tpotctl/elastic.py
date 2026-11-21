@@ -203,6 +203,7 @@ def get_policy(url: str = ES_URL, opener: Callable = urllib.request.urlopen,
     try:
         answer = _call("GET", f"/_ilm/policy/{name}", url, opener)
     except urllib.error.HTTPError as err:
+        err.close()
         if err.code == 404:
             return None
         raise ElasticError(f"Elasticsearch answered {err.code} for the ILM policy {name}")
