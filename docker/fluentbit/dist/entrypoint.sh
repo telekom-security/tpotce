@@ -189,7 +189,7 @@ fuPROBE () {
     fi
     if [ "$myCODE" = "401" ] && [ "$myMARK" = "login" ] && [ "$mySTAGE" = "2" ]; then
       echo "The HIVE does not accept this SENSOR's login (TPOT_HIVE_USER); tpot sensors list on the HIVE shows its access; logs wait here." >&2
-    elif [ "$myCODE" = "401" ]; then
+    elif [ "$myCODE" = "401" ] && [ "$mySTAGE" = "1" ]; then
       echo "The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here." >&2
     elif [ "$myCODE" = "503" ] && [ -z "$myMARK" ]; then
       echo "The HIVE's Logstash pipeline is not ready for this SENSOR format; logs wait here." >&2

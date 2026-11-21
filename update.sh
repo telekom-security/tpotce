@@ -1615,15 +1615,21 @@ function fuHIVE_PINNED () {
 	return "${myRC}"
 }
 
-# One request of fuHIVE_INGEST to /tpot-ingest with the curl options given. Sets its myANSWER (the
-# headers of -D - and the error line of curl, curl: (N) ..., in one answer), myRC, myCODE and myMARK.
-# Only the HIVE's own headers count: an HTTPS proxy's CONNECT reply stays out of them (curl >= 7.54).
+# One request to /tpot-ingest. The target and all curl options are explicit arguments; response details are
+# in TPOT_HIVE_ASK_*. Only the HIVE's own headers count: an HTTPS proxy's CONNECT reply stays out of them
+# (curl >= 7.54).
 function fuHIVE_ASK () {
-	myRC=0
-	myANSWER=$(curl -sS --max-time 10 --suppress-connect-headers "${myTLS[@]}" "$@" -o /dev/null -D - \
-	  "https://${myHIVE}:64294/tpot-ingest" 2>&1) || myRC=$?
-	myCODE=$(printf '%s\n' "${myANSWER}" | tr -d '\r' | awk '/^HTTP\//{code=$2} END{print code}')
-	myMARK=$(printf '%s\n' "${myANSWER}" | tr -d '\r' \
+	local myHIVE_ADDRESS="$1"
+	shift
+	TPOT_HIVE_ASK_ANSWER=""
+	TPOT_HIVE_ASK_RC=0
+	TPOT_HIVE_ASK_CODE=""
+	TPOT_HIVE_ASK_MARK=""
+	TPOT_HIVE_ASK_ANSWER=$(curl -sS --max-time 10 --suppress-connect-headers "$@" -o /dev/null -D - \
+	  "https://${myHIVE_ADDRESS}:64294/tpot-ingest" 2>&1) || TPOT_HIVE_ASK_RC=$?
+	TPOT_HIVE_ASK_CODE=$(printf '%s\n' "${TPOT_HIVE_ASK_ANSWER}" | tr -d '\r' \
+	  | awk '/^HTTP\//{code=$2} END{print code}')
+	TPOT_HIVE_ASK_MARK=$(printf '%s\n' "${TPOT_HIVE_ASK_ANSWER}" | tr -d '\r' \
 	  | awk 'tolower($0) ~ /^x-tpot-ingest:/{sub(/^[^:]*:[ \t]*/, ""); sub(/[ \t]+$/, ""); mark=$0} END{print mark}')
 }
 
@@ -1637,7 +1643,7 @@ function fuHIVE_ASK () {
 # warning in the summary - Fluent Bit keeps the logs on this SENSOR until then - and never fails the update.
 function fuHIVE_INGEST () {
 	local myENVFILE="$HOME/tpotce/.env"
-	local myHIVE myCRT myBASE myLOGIN myAUTH myREASON myANSWER myCODE myMARK myTEXT myRC=0 mySTAGE=1
+	local myHIVE myCRT myBASE myLOGIN myAUTH myREASON myTEXT mySTAGE=1
 	local myTLS=() myCA=() myCHECK=() myOPENSSL3="" myPINNED=""
 	[ "$(fuENV_VALUE "${myENVFILE}" TPOT_TYPE)" = "SENSOR" ] || return 0
 	myHIVE=$(fuENV_VALUE "${myENVFILE}" TPOT_HIVE_IP)
@@ -1650,6 +1656,10 @@ function fuHIVE_INGEST () {
 	if [ "$(fuENV_VALUE "${myENVFILE}" LS_SSL_VERIFICATION)" = "none" ];
 	  then
 	    myTLS=(-k)
+	    if fuHIVE_PINNED "${myCRT}" "${myBASE}";
+	      then
+	        myTLS+=(--cacert "${myCRT}")
+	    fi
 	  else
 	    # -no-CAstore of the rule and the verdict came with OpenSSL 3
 	    if [[ "$(openssl version 2>/dev/null)" =~ ^OpenSSL\ ([0-9]+)\. ]] && [ "${BASH_REMATCH[1]}" -ge 3 ];
@@ -1688,46 +1698,54 @@ function fuHIVE_INGEST () {
 	        fi
 	    fi
 	fi
-	fuHIVE_ASK
-	if [ "${myCODE}" = "401" ] && [ "${myMARK}" = "login" ];
+	fuHIVE_ASK "${myHIVE}" "${myTLS[@]}"
+	if [ "${TPOT_HIVE_ASK_CODE}" = "401" ] && [ "${TPOT_HIVE_ASK_MARK}" = "login" ];
 	  then
 	    mySTAGE=2
 	    myLOGIN=$(fuENV_VALUE "${myENVFILE}" TPOT_HIVE_USER)
+	    if [ -z "${myLOGIN}" ];
+	      then
+	        myTEXT="TPOT_HIVE_USER is empty; the HIVE is not asked whether it takes this SENSOR's format."
+	        fuUI_WARN "${myTEXT}"
+	        fuDID warn "${myTEXT}"
+	        return 0
+	    fi
 	    # the login only in a 0600 file (printf is a builtin): never in the argv of curl, gone right after
 	    if ! myAUTH=$(umask 077 && mktemp "${myBASE}/tpot-ingest.XXXXXX") \
 	       || ! printf 'Authorization: Basic %s\n' "${myLOGIN}" > "${myAUTH}";
 	      then
 	        [ -z "${myAUTH}" ] || rm -f "${myAUTH}"
-	        myTEXT="No temporary file could be made for the login, the HIVE is not asked whether it takes this SENSOR's format."
+	        myTEXT="No temporary file could be made for the login; check that the temporary directory is writable. The HIVE is not asked whether it takes this SENSOR's format."
 	        fuUI_WARN "${myTEXT}"
 	        fuDID warn "${myTEXT}"
 	        return 0
 	    fi
-	    fuHIVE_ASK -H @"${myAUTH}"
+	    fuHIVE_ASK "${myHIVE}" "${myTLS[@]}" -H @"${myAUTH}"
 	    rm -f "${myAUTH}"
 	fi
-	if [ "${myRC}" = "0" ] && [ "${mySTAGE}" = "2" ] && [ "${myCODE}" = "204" ] && [ "${myMARK}" = "2" ];
+	if [ "${TPOT_HIVE_ASK_RC}" = "0" ] && [ "${mySTAGE}" = "2" ] \
+	   && [ "${TPOT_HIVE_ASK_CODE}" = "204" ] && [ "${TPOT_HIVE_ASK_MARK}" = "2" ];
 	  then
 	    return 0
 	fi
-	if [ "${myCODE}" = "401" ] && [ "${myMARK}" = "login" ] && [ "${mySTAGE}" = "2" ];
+	if [ "${TPOT_HIVE_ASK_CODE}" = "401" ] && [ "${TPOT_HIVE_ASK_MARK}" = "login" ] && [ "${mySTAGE}" = "2" ];
 	  then
 	    myTEXT="The HIVE does not accept this SENSOR's login (TPOT_HIVE_USER); tpot sensors list on the HIVE shows its access; logs wait here."
-	elif [ "${myCODE}" = "401" ];
+	elif [ "${TPOT_HIVE_ASK_CODE}" = "401" ] && [ "${mySTAGE}" = "1" ];
 	  then
 	    myTEXT="The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here."
-	elif [ "${myCODE}" = "503" ] && [ -z "${myMARK}" ];
+	elif [ "${TPOT_HIVE_ASK_CODE}" = "503" ] && [ -z "${TPOT_HIVE_ASK_MARK}" ];
 	  then
 	    myTEXT="The HIVE's Logstash pipeline is not ready for this SENSOR format; logs wait here."
-	elif [ "${myCODE}" = "429" ];
+	elif [ "${TPOT_HIVE_ASK_CODE}" = "429" ];
 	  then
 	    myTEXT="The HIVE is busy (HTTP 429)."
-	elif [ -n "${myCODE}" ] && [ "${myCODE}" != "000" ];
+	elif [ -n "${TPOT_HIVE_ASK_CODE}" ] && [ "${TPOT_HIVE_ASK_CODE}" != "000" ];
 	  then
-	    myTEXT="The HIVE is not reachable (HTTP ${myCODE})."
+	    myTEXT="The HIVE is not reachable (HTTP ${TPOT_HIVE_ASK_CODE})."
 	  else
-	    myTEXT=$(printf '%s\n' "${myANSWER}" | tr -d '\r' | grep -E '^curl: ' | tail -n 1)
-	    myTEXT="The HIVE is not reachable (${myTEXT:-no answer, curl ${myRC}})."
+	    myTEXT=$(printf '%s\n' "${TPOT_HIVE_ASK_ANSWER}" | tr -d '\r' | grep -E '^curl: ' | tail -n 1)
+	    myTEXT="The HIVE is not reachable (${myTEXT:-no answer, curl ${TPOT_HIVE_ASK_RC}})."
 	fi
 	fuUI_WARN "${myTEXT}"
 	fuDID warn "${myTEXT}"

@@ -264,7 +264,8 @@ class HelpersTest(unittest.TestCase):
         # tpotinit's first start and tpot sensors cert --renew issue the certificate of the HIVE alike
         with open(os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "entrypoint.sh"), encoding="utf-8") as handle:
             script = handle.read()
-        start = script.index("openssl req")
+        comment = script.index("# Generating self signed certificate")
+        start = script.index("openssl req", comment)
         end = re.compile(r"[^\\]\n").search(script, start).end()
         command = shlex.split(script[start:end].replace("\\\n", " "))
         renew = sensors.renew_command(["IP:10.1.2.3"], "k", "c")
@@ -274,6 +275,15 @@ class HelpersTest(unittest.TestCase):
         self.assertFalse([part for part in command if "rsa:" in part], command)
         for option in ("-days", "-subj"):
             self.assertEqual(command[command.index(option) + 1], renew[renew.index(option) + 1], option)
+
+    def test_key_generation_extraction_ignores_an_earlier_openssl_req_comment(self):
+        with open(os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "entrypoint.sh"), encoding="utf-8") as handle:
+            script = "# Earlier documentation mentions openssl req but is not the key-generation command.\n" + handle.read()
+        comment = script.index("# Generating self signed certificate")
+        start = script.index("openssl req", comment)
+        end = re.compile(r"[^\\]\n").search(script, start).end()
+        command = shlex.split(script[start:end].replace("\\\n", " "))
+        self.assertIn("-newkey", command)
 
     def test_status(self):
         def bucket(key, host, ip):

@@ -248,8 +248,14 @@ with open(headers, "w", encoding="utf-8") as handle:
     SLEEP = """#!{python}
 import json, os, signal, sys
 stub, probe = {stub!r}, {probe!r}
+certificate = {certificate!r}
 with open(os.path.join(stub, "sleep.jsonl"), "a", encoding="utf-8") as handle:
     handle.write(json.dumps({{"seconds": sys.argv[1], "files": sorted(os.listdir(probe))}}) + "\\n")
+replacement = os.path.join(stub, "trust-change")
+if os.path.exists(replacement):
+    with open(replacement, encoding="utf-8") as source, open(certificate, "w", encoding="utf-8") as target:
+        target.write(source.read())
+    os.unlink(replacement)
 with open(os.path.join(stub, "sleep.jsonl"), encoding="utf-8") as handle:
     count = len(handle.read().splitlines())
 with open(os.path.join(stub, "sleeps"), encoding="utf-8") as handle:
@@ -314,7 +320,8 @@ os.execvp(sys.argv[2], sys.argv[2:])
         self.system_ca = self.folder / "ca-certificates.crt"
         for path in (self.stub, self.probe, self.bin):
             path.mkdir()
-        values = {"python": sys.executable, "stub": str(self.stub), "probe": str(self.probe)}
+        values = {"python": sys.executable, "stub": str(self.stub), "probe": str(self.probe),
+                  "certificate": str(self.hive_crt)}
         for name, text in (("curl", self.CURL), ("sleep", self.SLEEP), ("fluent-bit", self.FLUENT_BIT),
                            ("openssl", self.OPENSSL), ("timeout", self.TIMEOUT)):
             (self.bin / name).write_text(text.format(**values), encoding="utf-8")
@@ -382,6 +389,24 @@ os.execvp(sys.argv[2], sys.argv[2:])
         self.assertEqual([sleep["seconds"] for sleep in sleeps], ["300", "300"])
         self.assertIsNone(started)
 
+    def test_a_stage_two_401_without_its_marker_is_not_an_old_hive_or_login_refusal(self):
+        result, calls, sleeps, started = self.run_probe(["401 login"], ["401"])
+        self.assertEqual(result.returncode, 143, result.stderr)
+        self.assertIn("The HIVE is not reachable (HTTP 401).", result.stderr)
+        self.assertNotIn(self.OLD, result.stderr)
+        self.assertNotIn(self.LOGIN, result.stderr)
+        self.assertEqual([call["header"] is not None for call in calls], [False, True])
+        self.assertEqual([sleep["seconds"] for sleep in sleeps], ["300"])
+        self.assertIsNone(started)
+
+    def test_an_empty_hive_login_is_explicit_and_never_sent(self):
+        result, calls, sleeps, started = self.run_probe(["401 login"], ["204 2"], TPOT_HIVE_USER="")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("TPOT_HIVE_USER is empty;", result.stderr)
+        self.assertEqual(calls, [])
+        self.assertEqual(sleeps, [])
+        self.assertIsNone(started)
+
     def test_a_refused_login_waits_and_stays_healthy(self):
         result, calls, sleeps, started = self.run_probe(["401 login"], ["401 login"])
         self.assertEqual(result.returncode, 143, result.stderr)
@@ -420,6 +445,24 @@ os.execvp(sys.argv[2], sys.argv[2:])
                 self.assertIn(self.START, result.stdout)
                 self.assertIsNotNone(started)
 
+    def test_trust_is_recalculated_once_per_round_even_after_http_429(self):
+        self.hive_crt.write_text(self.SELF, encoding="utf-8")
+        (self.stub / "trust-change").write_text(self.LEAF, encoding="utf-8")
+        result, calls, sleeps, started = self.run_probe(
+            ["429", "401 login"], ["204 2"], sleeps=2, LS_SSL_VERIFICATION="full")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(self.START, result.stdout)
+        self.assertEqual(len([call for call in self.records("openssl.jsonl")
+                             if call["argv"][:1] == ["s_client"]]), 2)
+        self.assertEqual(len(self.records("timeout.jsonl")), 2)
+        self.assertEqual([self.option(call["argv"], "--cacert") for call in calls],
+                         [str(self.hive_crt), str(self.system_ca), str(self.system_ca)])
+        self.assertEqual([call["header"] is not None for call in calls], [False, False, True])
+        self.assertEqual(len(sleeps), 1)
+        self.assertGreaterEqual(int(sleeps[0]["seconds"]), 15)
+        self.assertLessEqual(int(sleeps[0]["seconds"]), 45)
+        self.assertIsNotNone(started)
+
     def test_any_other_answer_is_not_reachable(self):
         for stage1, stage2, code, logins in ((["204 2"], ["204 2"], "204", 0), (["401 login"], ["500"], "500", 1)):
             with self.subTest(stage1=stage1, stage2=stage2):
@@ -431,6 +474,15 @@ os.execvp(sys.argv[2], sys.argv[2:])
                 self.assertEqual(sum(call["header"] is not None for call in calls), logins)
                 self.assertEqual([sleep["seconds"] for sleep in sleeps], ["300"])
                 self.assertIsNone(started)
+
+    def test_a_stage_two_204_without_its_marker_is_not_success(self):
+        result, calls, sleeps, started = self.run_probe(["401 login"], ["204"])
+        self.assertEqual(result.returncode, 143, result.stderr)
+        self.assertIn("The HIVE is not reachable (HTTP 204).", result.stderr)
+        self.assertNotIn(self.START, result.stdout)
+        self.assertEqual([call["header"] is not None for call in calls], [False, True])
+        self.assertEqual([sleep["seconds"] for sleep in sleeps], ["300"])
+        self.assertIsNone(started)
 
     def test_a_proxy_marker_never_gets_the_login(self):
         # an HTTPS proxy's CONNECT reply is no answer of the HIVE: its X-TPot-Ingest must not open stage 2

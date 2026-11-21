@@ -3500,10 +3500,10 @@ os.execvp(sys.argv[2], sys.argv[2:])
         self.hive_crt = Path(self.tpotce, "data", "hive.crt")
         self.hive_crt.parent.mkdir()
 
-    def env_file(self, kind="SENSOR", verification=None, hive="192.0.2.10", crt=SELF):
+    def env_file(self, kind="SENSOR", verification=None, hive="192.0.2.10", crt=SELF, hive_user=AUTH):
         """The .env of this host and its data folder with hive.crt of these PEM blocks (None: no file)."""
         lines = [f"TPOT_TYPE={kind}", "TPOT_DATA_PATH=./data", f"TPOT_HIVE_IP={hive}",
-                 f'TPOT_HIVE_USER: "{self.AUTH}"']
+                 f'TPOT_HIVE_USER: "{hive_user}"']
         if verification:
             lines.append(f'LS_SSL_VERIFICATION: "{verification}"')
         Path(self.tpotce, ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -3596,6 +3596,16 @@ os.execvp(sys.argv[2], sys.argv[2:])
         self.assertEqual(len(calls), 1)
         self.assertNotIn("-H", calls[0]["argv"])
 
+    def test_a_stage_two_401_without_its_marker_is_not_an_old_hive_or_login_refusal(self):
+        self.env_file()
+        done, calls = self.probe(self.ASKED, self.said("HTTP/2 401", 'www-authenticate: Basic realm="closed site"'))
+        self.assertEqual(done, ["warn:The HIVE is not reachable (HTTP 401)."])
+        self.assertNotIn("warn:" + self.OLD, done)
+        self.assertNotIn("warn:" + self.LOGIN, done)
+        self.assertEqual(len(calls), 2)
+        self.assertIsNone(calls[0]["header"])
+        self.assertTrue(calls[1]["header"].startswith("@"), calls[1])
+
     def test_a_proxy_marker_never_gets_the_login(self):
         # an HTTPS proxy's CONNECT reply is no answer of the HIVE: its X-TPot-Ingest must not open stage 2
         self.env_file()
@@ -3623,6 +3633,23 @@ os.execvp(sys.argv[2], sys.argv[2:])
                 done, calls = self.probe(stage1, stage2)
                 self.assertEqual(done, ["warn:" + text])
                 self.assertEqual(len(calls), count)
+
+    def test_a_stage_two_204_without_its_marker_is_not_success(self):
+        self.env_file()
+        done, calls = self.probe(self.ASKED, self.said("HTTP/2 204"))
+        self.assertEqual(done, ["warn:The HIVE is not reachable (HTTP 204)."])
+        self.assertEqual(len(calls), 2)
+        self.assertIsNone(calls[0]["header"])
+        self.assertTrue(calls[1]["header"].startswith("@"), calls[1])
+
+    def test_an_empty_hive_login_is_explicit_and_never_sent(self):
+        self.env_file(hive_user="")
+        done, calls = self.probe(self.ASKED, self.TAKEN)
+        self.assertEqual(done, [
+            "warn:TPOT_HIVE_USER is empty; the HIVE is not asked whether it takes this SENSOR's format."
+        ])
+        self.assertEqual(len(calls), 1)
+        self.assertIsNone(calls[0]["header"])
 
     def test_a_ca_certificate_uses_curls_default(self):
         # a leaf of a CA (and its intermediate) verifies no block itself, and without hive.crt: curl and
@@ -3711,19 +3738,70 @@ os.execvp(sys.argv[2], sys.argv[2:])
         self.env_file()
         missing = shlex.quote(str(Path(self.home, "missing")))
         done, calls = self.probe(self.ASKED, self.TAKEN, before=f"TMPDIR={missing}")
-        self.assertEqual(done, ["warn:No temporary file could be made for the login, the HIVE is not asked whether "
-                                "it takes this SENSOR's format."])
+        self.assertEqual(done, ["warn:No temporary file could be made for the login; check that the temporary "
+                                "directory is writable. The HIVE is not asked whether it takes this SENSOR's "
+                                "format."])
         self.assertEqual(len(calls), 1)
 
-    def test_verification_none_skips_the_certificate(self):
+    def test_verification_none_passes_hive_crt_without_using_a_verdict(self):
         self.env_file(verification="none")
         done, calls = self.probe(self.ASKED, self.TAKEN)
         self.assertEqual(done, [])
         self.assertEqual([call["argv"].count("-k") for call in calls], [1, 1])
         for call in calls:
-            self.assertNotIn("--cacert", call["argv"])
-        self.assertEqual(self.records("openssl.jsonl"), [])
+            self.assertEqual(self.option(call["argv"], "--cacert"), str(self.hive_crt))
+        self.assertFalse([call for call in self.records("openssl.jsonl") if call["argv"][:1] == ["s_client"]])
         self.assertEqual(self.records("timeout.jsonl"), [])
+
+    def test_a_429_round_has_exactly_one_tls_verdict(self):
+        self.env_file()
+        done, calls = self.probe(self.said("HTTP/2 429"), self.TAKEN)
+        self.assertEqual(done, ["warn:" + self.BUSY])
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(self.verdicts()), 1)
+        self.assertEqual(len([call for call in self.records("openssl.jsonl")
+                             if call["argv"][:1] == ["s_client"]]), 1)
+
+    def test_failed_temp_directory_creation_pins_safely_before_any_request(self):
+        self.env_file()
+        self.stub("mktemp", "#!/bin/sh\nexit 1\n")
+        done, calls = self.probe(
+            self.ASKED, self.TAKEN, s_client="verify error:num=20:unable to get local issuer certificate")
+        self.assertEqual(done, [f"warn:{self.PINNED.format('unable to get local issuer certificate')}"])
+        self.assertEqual(calls, [])
+        self.assertEqual([self.option(verdict, "-CAfile") for verdict in self.verdicts()], [str(self.hive_crt)])
+
+    def test_temp_file_warning_is_actionable_without_exposing_its_path(self):
+        self.env_file()
+        secret_path = str(Path(self.home, "private-temp-location"))
+        self.stub("mktemp", """#!/bin/sh
+case "$*" in
+    *tpot-ingest*) exit 1 ;;
+    *) exec /usr/bin/mktemp "$@" ;;
+esac
+""")
+        done, calls = self.probe(self.ASKED, self.TAKEN, before=f"TMPDIR={shlex.quote(secret_path)}")
+        self.assertEqual(len(calls), 1)
+        warning = done[0]
+        self.assertIn("temporary directory is writable", warning)
+        self.assertNotIn(secret_path, warning)
+        self.assertNotIn(self.AUTH, warning)
+
+    def test_hive_ask_uses_explicit_target_and_curl_options(self):
+        Path(self.home, "answer-1").write_text(json.dumps(self.said("HTTP/2 204", "X-TPot-Ingest: 2")),
+                                               encoding="utf-8")
+        result = self.source_update(
+            'probe_ask () {\n'
+            '  local myHIVE="wrong.example" myTLS=(-k) myANSWER="caller answer" myRC=99 myCODE=599 myMARK=caller\n'
+            '  fuHIVE_ASK "hive.example" --cacert "/explicit/hive.crt"\n'
+            '  printf "ask=%s|%s|%s|%s\\n" "$TPOT_HIVE_ASK_CODE" "$TPOT_HIVE_ASK_MARK" '
+            '"$TPOT_HIVE_ASK_RC" "$TPOT_HIVE_ASK_ANSWER"\n'
+            '}\nprobe_ask')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("ask=204|2|0|", result.stdout)
+        call = self.records("curl.jsonl")[0]
+        self.assertEqual(self.option(call["argv"], "--cacert"), "/explicit/hive.crt")
+        self.assertEqual(call["argv"][-1], "https://hive.example:64294/tpot-ingest")
 
     def test_a_hive_asks_nothing(self):
         for kind in ("HIVE", ""):
