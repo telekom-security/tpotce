@@ -83,8 +83,9 @@ the tpotinit image without a network, Fluent Bit shares its network namespace
      log of every input for 360 s; 30 s after the load it answers again: every
      line arrives (duplicates allowed), the log has no "Too many open files".
  14  The HIVE answers 401 with X-TPot-Ingest login to the login as well (it does
-     not accept it): no POST, each round asks without the login, then with it,
-     the message names it, the container stays healthy for 3 checks in a row.
+     not accept it): no POST; one probe round asks first without the login, then
+     with it; the message names it, the container stays healthy for 3 checks
+     in a row.
  15  The trust file: a self-signed hive.crt (pinned), a leaf of a CA as hive.crt
      with that CA as the system store (FLB_SYSTEM_CA) and the leaf with the root
      of its CA appended (pinned) deliver; the leaf alone with the image's own
@@ -94,10 +95,10 @@ Fluent Bit runs with the file limit (ulimits nofile) of compose/sensor.yml; wher
 it has none, with soft 1024 / hard 524288, what a Debian docker gives a container
 (Docker Desktop gives 1048576 and would hide a leak of files).
 
-All cases take about 22 minutes (heartbeat interval, 503 and retries; case 13
-alone about 17: 6 min of load, then until the retries delivered). Case 13
-waits as long as Fluent Bit holds chunks of the outage, up to 35 min after it:
-a chunk retried often during the outage waits up to 2000 s for its next retry.
+All cases can take about 47 minutes. Case 13 alone can take about 42: 360 s
+of load, 30 s before the HIVE answers again, then up to 2100 s (35 min) for
+held chunks to arrive. A chunk retried often during the outage waits up to
+2000 s for its next retry.
 
 Options:
   --image IMAGE       Fluent Bit image to test. Defaults to docker/fluentbit/docker-compose.yml.
@@ -397,10 +398,15 @@ def case_invalid(run, prefix):
 
 
 def nothing(run, seconds):
-    time.sleep(float(seconds))
-    found = requests(run)
-    if found:
-        fail(f"{len(found)} requests reached the stub, expected none")
+    deadline = time.monotonic() + float(seconds)
+    while True:
+        found = requests(run)
+        if found:
+            fail(f"{len(found)} requests reached the stub, expected none")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(0.5, remaining))
     print(f"no request reached the stub in {seconds} s")
 
 
@@ -870,7 +876,7 @@ run_trust() {
   HIVE_CRT=hive prepare_run trust-leaf
   start_run hive
   wait_for_log "${TLS_SYSTEM/REASON/unable to get local issuer certificate}" 30
-  checker nothing "${RUN_DIR}" 5
+  checker nothing "${RUN_DIR}" "${TEST_TIMEOUT}"
   test_ok "15 trust file: a self-signed hive.crt, a CA leaf with its CA as the system store and a leaf with its root appended deliver; the leaf alone: $(flb_logs | grep -F 'is not trusted' | head -n 1)"
   stop_run
 }
@@ -906,7 +912,10 @@ while [ $# -gt 0 ]; do
 done
 printf '%b' "${answer}" > "${headers}"
 EOF
-  printf '#!/bin/bash\necho "limit=${FLB_STORAGE_LIMIT}"\n' > "${stub}/fluent-bit"
+  cat > "${stub}/fluent-bit" <<'EOF'
+#!/bin/bash
+echo "limit=${FLB_STORAGE_LIMIT}"
+EOF
   chmod 0755 "${stub}" "${stub}/curl" "${stub}/fluent-bit"
   rc=0
   out="$(docker run --rm --network none --read-only --tmpfs /tmp:uid=2000,gid=2000 -v "${stub}:/stub:ro" \

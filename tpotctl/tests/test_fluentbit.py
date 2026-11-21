@@ -642,6 +642,50 @@ class TpotinitShipperTest(unittest.TestCase):
                 self.assertEqual(result.stdout.strip(), expected)
 
 
+class SmokeScriptTest(unittest.TestCase):
+    SMOKE = ROOT / "docker" / "_tests" / "tests" / "fluentbit.sh"
+
+    @unittest.skipUnless(shutil.which("bash"), "needs bash")
+    def test_case_14_help_describes_one_probe_round(self):
+        result = subprocess.run([shutil.which("bash"), str(self.SMOKE), "--help"],
+                                capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("one probe round asks first without the login", result.stdout)
+        self.assertNotIn("each round asks without the login", result.stdout)
+
+    @unittest.skipUnless(yaml and shutil.which("bash"), "needs PyYAML and bash")
+    def test_generated_smoke_compose_keeps_the_512m_limit(self):
+        with tempfile.TemporaryDirectory() as folder:
+            fixture_root = Path(folder)
+            script_dir = fixture_root / "docker" / "_tests" / "tests"
+            lib_dir = fixture_root / "docker" / "_tests" / "lib"
+            script_dir.mkdir(parents=True)
+            lib_dir.mkdir(parents=True)
+            script = self.SMOKE.read_text(encoding="utf-8")
+            self.assertTrue(script.endswith('\nmain "$@"\n'))
+            (script_dir / "fluentbit.sh").write_text(script[:-len('main "$@"\n')], encoding="utf-8")
+            shutil.copyfile(ROOT / "docker" / "_tests" / "lib" / "common.sh", lib_dir / "common.sh")
+            (fixture_root / "version").write_text("24.04.2\n", encoding="utf-8")
+            script = r"""
+source "$1"
+INIT_IMAGE=init:test
+IMAGE=fluentbit:test
+TEST_CONTAINER_NAME=tpot-smoke-fluentbit
+NOFILE_SOFT=1024
+NOFILE_HARD=524288
+RUN_DIR="$2"
+CERTS="$2/certs"
+TEST_HARNESS_COMPOSE="$2/docker-compose.yml"
+write_compose hive
+"""
+            result = subprocess.run([shutil.which("bash"), "-c", script, "bash",
+                                     str(script_dir / "fluentbit.sh"), folder],
+                                    capture_output=True, text=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            compose = yaml.safe_load((fixture_root / "docker-compose.yml").read_text(encoding="utf-8"))
+        self.assertEqual(compose["services"]["fluentbit"]["mem_limit"], "512m")
+
+
 class OutageCountTest(unittest.TestCase):
     """Case 13 of the smoke test after the outage: a chunk Fluent Bit retried during it waits up to 2001 s
     for its next retry (scheduler.cap, 2000 s by default), so the check waits while Fluent Bit holds chunks
@@ -712,6 +756,39 @@ class OutageCountTest(unittest.TestCase):
             except SystemExit as stop:
                 code = stop.code
         return code, clock[0], out.getvalue(), err.getvalue()
+
+    def run_nothing(self, events=(), seconds="10"):
+        source = self.SMOKE.read_text(encoding="utf-8").split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
+        body, call = source.rsplit("\n", 1)
+        self.assertTrue(call.startswith("COMMANDS[sys.argv[1]]"), call)
+        clock = [0.0]
+        pending = sorted(events, key=lambda event: event[0])
+
+        def sleep(duration):
+            clock[0] += duration
+            while pending and pending[0][0] <= clock[0]:
+                pending.pop(0)[1]()
+
+        env = {"SMOKE_HOSTNAME": "sensor-smoke", "SMOKE_EXTIP": "198.51.100.7", "SMOKE_INTIP": "10.0.0.7",
+               "SMOKE_VERSION": "24.04.2", "SMOKE_AUTH": "eA==", "SMOKE_TIMEOUT": "120",
+               "SMOKE_CONTAINER": self.CONTAINER, "PATH": os.environ.get("PATH", "")}
+        namespace = {"__name__": "check"}
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            exec(compile(body, str(self.SMOKE), "exec"), namespace)  # noqa: S102 - the checker of the smoke test
+            namespace["time"] = types.SimpleNamespace(monotonic=lambda: clock[0], sleep=sleep)
+            try:
+                namespace["nothing"](str(self.run_dir), seconds)
+                code = 0
+            except SystemExit as stop:
+                code = stop.code
+        return code, clock[0], out.getvalue(), err.getvalue()
+
+    def test_quiet_wait_stops_when_a_request_breaks_the_condition(self):
+        code, took, _out, err = self.run_nothing([(2, lambda: self.deliver("unexpected"))])
+        self.assertEqual(code, 1)
+        self.assertLess(took, 5)
+        self.assertIn("requests reached the stub", err)
 
     def test_waits_while_fluent_bit_holds_chunks(self):
         self.deliver("flood-00000", "flood-00001")

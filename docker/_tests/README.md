@@ -57,7 +57,9 @@ Common options:
 ./docker/_tests/run.sh --quick fluentbit
 ```
 
-`--quick` skips the long cases of a test (fluentbit case 13, about 15 to 35 minutes); a case named with `--cases` still runs.
+`--quick` skips the long cases of a test (fluentbit case 13, which can add
+about 42 minutes: 360 s of load, 30 s before recovery, and up to 2100 s for
+held chunks to arrive); a case named with `--cases` still runs.
 
 The runner checks common and test-specific dependencies before starting
 containers, and fails early with a list of missing tools.
@@ -231,8 +233,9 @@ one that does not accept the login); and an outage under load without loss;
 the trust file: `hive.crt` pinned when one of its certificates verifies itself
 (the HIVE's own, or a leaf with the root of its CA appended), else the system
 store, and the TLS verdict for a leaf whose CA it lacks.
-`--cases 3,7` runs only some. All cases take about 22 minutes, case 13 alone
-about 17.
+`--cases 3,7` runs only some. Allow about 47 minutes for all cases; case 13
+alone can take about 42 minutes (360 s of load, 30 s before the HIVE answers,
+then up to 2100 s for held chunks to arrive).
 
 The image builder's `-T` runs `logstash_fixtures` and `logstash_es` against the
 Logstash image it just built, `fluentbit` against its Fluent Bit image, and
