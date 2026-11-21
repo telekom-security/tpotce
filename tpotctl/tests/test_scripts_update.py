@@ -718,10 +718,27 @@ class TaskScreenTest(Scripts):
             out.write("#!/bin/sh\necho \"installing the packages\"\n")
         os.chmod(launcher, 0o755)
         call = f'myTPOT_LINK={shlex.quote(os.path.join(self.home, "link"))}; fuLOG_START; fuTPOT_SETUP'
-        self.assertIn("installing the packages", self.source_update(call, TPOT_MARKS="1").stdout)
+        marked = self.source_update(call, TPOT_MARKS="1")
+        self.assertIn("### Installing the Python packages of the T-Pot Manager ...", marked.stdout)
+        self.assertIn("installing the packages", marked.stdout)
         result = self.source_update(call)
         self.assertNotIn("installing the packages", result.stdout)
         self.assertIn("The T-Pot Manager is ready.", result.stdout)
+
+    def test_tpot_setup_failure_stays_visible_as_a_warning(self):
+        launcher = os.path.join(self.tpotce, "tpot")
+        with open(launcher, "w", encoding="utf-8") as out:
+            out.write("#!/bin/sh\necho \"setup failure detail\"\nexit 37\n")
+        os.chmod(launcher, 0o755)
+        call = (f'myTPOT_LINK={shlex.quote(os.path.join(self.home, "link"))}; '
+                'fuLOG_START; fuTPOT_SETUP; fuUI_SUMMARY "Update" "${myDONE[@]}"')
+        result = self.source_update(call, TPOT_MARKS="1")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("### Installing the Python packages of the T-Pot Manager ...", result.stdout)
+        self.assertIn("setup failure detail", result.stdout)
+        warning = "The T-Pot Manager could not set up its Python packages, it tries again on its next start."
+        self.assertIn(f"### [WARNING] - {warning}", result.stdout)
+        self.assertIn(f"### Update\n### [WARNING] - {warning}", result.stdout)
 
     def test_what_runs_under_a_spinner(self):
         text = base.read("update.sh")
