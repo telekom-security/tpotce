@@ -1664,6 +1664,23 @@ def run_sudo(args, registry=None) -> int:
 CERT_RENEW = "tpot sensors cert --renew --distribute"
 
 
+def certificate_backup_note(registry, stamp: str, *, failed_reload: bool = False) -> str:
+    paths = [(registry.cert, f"{registry.cert}.bak-{stamp}"),
+             (registry.key, f"{registry.key}.bak-{stamp}")]
+    backups = [(path, backup) for path, backup in paths if os.path.exists(backup)]
+    if failed_reload:
+        if not backups:
+            return "the new certificate remains on disk; no prior certificate or key files were present to restore."
+        noun = "prior files" if len(backups) > 1 else "prior file"
+        moves = " and ".join(f"{backup} to {path}" for path, backup in backups)
+        return (f"the new certificate remains on disk; restore the {noun} by moving {moves} before T-Pot is restarted.")
+    if not backups:
+        return "New certificate; no prior certificate or key files were present to keep."
+    retained = " and ".join(os.path.basename(backup) for _path, backup in backups)
+    noun = "the prior files are" if len(backups) > 1 else "the prior file is"
+    return f"New certificate; {noun} kept as {retained}."
+
+
 def renew_certificate(registry, addresses, console, yes: bool, reload: bool, *, current: List[str]) -> str:
     """Issues the certificate of this HIVE anew for `current` (the SANs of the one the caller read) and
     `addresses`; only for a self-signed or a missing one (the callers check). "" declined or failed, else
@@ -1676,14 +1693,14 @@ def renew_certificate(registry, addresses, console, yes: bool, reload: bool, *, 
                    "every sensor needs the new one (sensors without access are skipped).", yes):
         return ""
     stamp = tsensors.renew_cert(registry, sans)
-    say.ok(f"New certificate, the old one is kept as nginx.crt.bak-{stamp}.", console.file)
+    say.ok(certificate_backup_note(registry, stamp), console.file)
     if not reload:
         return "not reloaded"
     try:
         state = ops.nginx_reload()
     except ops.OpsError as err:
-        error(f"nginx does not take the new certificate ({err}); the old ones are kept as nginx.crt.bak-{stamp} "
-              f"and nginx.key.bak-{stamp}, put them back before T-Pot is restarted.")
+        error(f"nginx does not take the new certificate ({err}); "
+              f"{certificate_backup_note(registry, stamp, failed_reload=True)}")
         return ""
     if state == "reloaded":
         say.ok("nginx uses the new certificate.", console.file)

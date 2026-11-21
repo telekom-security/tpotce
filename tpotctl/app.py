@@ -1757,19 +1757,27 @@ class SensorsPane(Vertical):
     @work(thread=True, exclusive=True, group="sensors")
     def fetch(self, stamp) -> None:
         from tpotctl import sensors as tsensors
-        cert = None
+        registry, status, found, cert = None, None, [], None
+        problems = []
         try:
             registry = self.app.backend.sensors()
+        except tsensors.SensorsError as err:
+            problems.append(str(err))
+        if registry is not None:
             try:
                 cert = self.app.backend.cert_info(registry.cert)
             except tsensors.SensorsError as err:
                 cert = str(err)
-            status = self.app.backend.sensor_status()
-            found = registry.file_only()
-            problem = ""
-        except tsensors.SensorsError as err:
-            registry, status, found, problem = None, None, [], str(err)
-        self.app.call_from_thread(self.finish_fetch, stamp, registry, status, problem, found, cert)
+            try:
+                status = self.app.backend.sensor_status()
+            except tsensors.SensorsError as err:
+                status = tsensors.Status()
+                problems.append(str(err))
+            try:
+                found = registry.file_only()
+            except tsensors.SensorsError as err:
+                problems.append(str(err))
+        self.app.call_from_thread(self.finish_fetch, stamp, registry, status, "\n".join(problems), found, cert)
 
     def finish_fetch(self, stamp, registry, status, problem, found, cert=None) -> None:
         from tpotctl import sensors as tsensors
@@ -1901,6 +1909,10 @@ class SensorsPane(Vertical):
                                                yes="Take over"),
                                  lambda yes: self.take_over(registry, names) if yes else None)
         elif button == "sensor-cert-renew":
+            if isinstance(self.cert, str):
+                from tpotctl.screens.dialogs import NoticeDialog
+                self.app.push_screen(NoticeDialog("Not renewed", self.cert))
+                return
             if isinstance(self.cert, tsensors.CertInfo) and not self.cert.self_signed:
                 # tpot sensors cert --renew refuses it too, there is nothing to start
                 from tpotctl.screens.dialogs import NoticeDialog

@@ -691,14 +691,18 @@ def cert_info(path: str, run: Callable = subprocess.run) -> Optional[CertInfo]:
     except (ValueError, OverflowError, SensorsError) as err:
         raise SensorsError(f"cannot read the certificate {path}: {err}")
     sans = re.search(r"X509v3 Subject Alternative Name:.*\n(.*)", text)
-    with tempfile.TemporaryDirectory(prefix="tpot-cert-") as tmp:
-        # the first certificate alone, as the SENSOR checks it: a root after it would verify the whole file
-        first = os.path.join(tmp, "first.crt")
-        proc = _openssl(["openssl", "x509", "-in", path, "-out", first], path, run)
-        if proc.returncode != 0:
-            raise SensorsError(f"cannot read the certificate {path}: {_first_line(proc.stderr) or 'openssl failed'}")
-        proc = _openssl(["openssl", "verify", "-no-CApath", "-no-CAstore", "-no_check_time", "-CAfile", first, first],
-                        path, run)
+    try:
+        with tempfile.TemporaryDirectory(prefix="tpot-cert-") as tmp:
+            # the first certificate alone, as the SENSOR checks it: a root after it would verify the whole file
+            first = os.path.join(tmp, "first.crt")
+            proc = _openssl(["openssl", "x509", "-in", path, "-out", first], path, run)
+            if proc.returncode != 0:
+                raise SensorsError(f"cannot read the certificate {path}: "
+                                   f"{_first_line(proc.stderr) or 'openssl failed'}")
+            proc = _openssl(["openssl", "verify", "-no-CApath", "-no-CAstore", "-no_check_time", "-CAfile", first,
+                             first], path, run)
+    except OSError as err:
+        raise SensorsError(f"cannot read the certificate {path}: {err}") from err
     if proc.returncode not in (0, 2):                           # 2: it does not verify against itself
         raise SensorsError(f"cannot check the certificate {path}: {_first_line(proc.stderr) or 'openssl failed'}")
     return CertInfo(key=key, self_signed=proc.returncode == 0, issuer=_issuer_name(issuer.group(1).strip()),

@@ -368,8 +368,10 @@ def nginx_reload(run: Callable = subprocess.run) -> str:
         return "not running"
     try:
         running = docker(["inspect", "-f", "{{.State.Running}}", "nginx"], run).strip()
-    except OpsError:
-        return "not running"
+    except OpsError as err:
+        if "No such object: nginx" in str(err):
+            return "not running"
+        raise
     if running != "true":
         return "not running"
     try:

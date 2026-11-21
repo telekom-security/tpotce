@@ -8,6 +8,7 @@ import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -171,6 +172,16 @@ class TTY(io.StringIO):
 
 class HelpersTest(unittest.TestCase):
 
+    def test_nginx_dockerfile_check_only_matches_certificate_directories(self):
+        check = re.compile(r"(?i)\b(?:COPY|ADD)\b[^\n]*(?:^|[\s/])(?:conf/ssl|nginx/ssl)(?:/|\s|$)")
+        self.assertIsNone(check.search("RUN apk add openssl && echo ssl"))
+        self.assertIsNone(check.search("# no conf/ssl or nginx/ssl is copied"))
+        self.assertIsNone(check.search("COPY ssl-assets/ /etc/nginx/"))
+        for line in ("COPY conf/ssl/ /etc/nginx/cert/", "COPY dist/conf/ssl /out/cert",
+                     "ADD nginx/ssl/ /etc/nginx/cert/", "COPY docker/nginx/ssl /out/cert"):
+            with self.subTest(line=line):
+                self.assertIsNotNone(check.search(line))
+
     def test_names_and_passwords(self):
         name = sensors.new_name({"sensor-a-b"})
         self.assertRegex(name, r"^sensor-[a-z]+-[a-z]+$")
@@ -328,7 +339,9 @@ class HelpersTest(unittest.TestCase):
             self.assertNotIn("ssl_dhparam", server, name)
         self.assertFalse(os.path.exists(os.path.join(conf, "ssl")))
         with open(os.path.join(REPO_DIR, "docker", "nginx", "Dockerfile"), encoding="utf-8") as handle:
-            self.assertNotIn("ssl", handle.read())
+            dockerfile = handle.read()
+        self.assertIsNone(re.search(r"(?i)\b(?:COPY|ADD)\b[^\n]*(?:^|[\s/])(?:conf/ssl|nginx/ssl)(?:/|\s|$)",
+                                    dockerfile))
 
 
 class CertificateTest(unittest.TestCase):
@@ -444,6 +457,15 @@ class CertificateTest(unittest.TestCase):
         with self.assertRaisesRegex(sensors.SensorsError, "it is no file"):
             sensors.cert_info(crt, run=mock.Mock(side_effect=AssertionError("openssl is not asked")))
 
+    def test_cert_info_reports_temporary_directory_errors_as_sensor_errors(self):
+        crt = os.path.join(self.tmp, "nginx.crt")
+        with open(crt, "w") as handle:
+            handle.write("certificate\n")
+        run, _calls = fake_openssl(RSA_TEXT)
+        with mock.patch.object(sensors.tempfile, "TemporaryDirectory", side_effect=OSError("permission denied")):
+            with self.assertRaisesRegex(sensors.SensorsError, r"cannot read the certificate .*permission denied"):
+                sensors.cert_info(crt, run=run)
+
     def test_cert_summary_lines(self):
         sans = ["IP:192.168.5.15", "DNS:hive.example.org"]
 
@@ -518,6 +540,19 @@ class CertificateTest(unittest.TestCase):
             self.assertEqual(ops.nginx_reload(run=docker((0, "true\n", ""), (0, "", ""), (0, "nginx\n", ""))),
                              "reloaded")
             self.assertEqual(calls, [inspect, test, hup])
+
+    def test_nginx_reload_distinguishes_missing_container_from_inspect_failure(self):
+        from tpotctl import ops
+        with mock.patch.object(ops, "linux_host", return_value=True), \
+                mock.patch.object(ops.shutil, "which", return_value="/usr/bin/docker"):
+            self.assertEqual(ops.nginx_reload(run=lambda *_args, **_kwargs:
+                                              mock.Mock(returncode=1, stdout="",
+                                                        stderr="Error: No such object: nginx")),
+                             "not running")
+            with self.assertRaisesRegex(ops.OpsError, "Cannot connect to the Docker daemon"):
+                ops.nginx_reload(run=lambda *_args, **_kwargs:
+                                 mock.Mock(returncode=1, stdout="",
+                                           stderr="Cannot connect to the Docker daemon"))
 
 
 class HeartbeatTest(unittest.TestCase):
@@ -953,6 +988,33 @@ class RegistryTest(unittest.TestCase):
         failing = mock.Mock(return_value=mock.Mock(returncode=1, stderr="boom"))
         with self.assertRaises(sensors.SensorsError):
             sensors.renew_cert(registry, ["IP:10.0.0.1"], run=failing)
+
+    def test_renew_preserves_mode_and_uses_the_unprivileged_cli_owner(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as tmp:
+            key, crt = os.path.join(tmp, "nginx.key"), os.path.join(tmp, "nginx.crt")
+            for path, content, mode in ((key, "old key\n", 0o600), (crt, "old certificate\n", 0o640)):
+                with open(path, "w") as handle:
+                    handle.write(content)
+                os.chmod(path, mode)
+            before = {path: os.stat(path) for path in (key, crt)}
+            registry = SimpleNamespace(key=key, cert=crt)
+
+            def fake_openssl(command, **_kwargs):
+                for flag in ("-keyout", "-out"):
+                    with open(command[command.index(flag) + 1], "w") as handle:
+                        handle.write("new\n")
+                return mock.Mock(returncode=0, stderr="")
+
+            stamp = sensors.renew_cert(registry, ["IP:10.0.0.1"], run=fake_openssl)
+            for path in (key, crt):
+                renewed, previous = os.stat(path), before[path]
+                self.assertEqual(stat.S_IMODE(renewed.st_mode), stat.S_IMODE(previous.st_mode), path)
+                self.assertEqual((renewed.st_uid, renewed.st_gid), (os.geteuid(), os.getegid()), path)
+                self.assertEqual((previous.st_uid, previous.st_gid), (os.geteuid(), os.getegid()), path)
+                backup = os.stat(f"{path}.bak-{stamp}")
+                self.assertEqual((backup.st_uid, backup.st_gid, stat.S_IMODE(backup.st_mode)),
+                                 (previous.st_uid, previous.st_gid, stat.S_IMODE(previous.st_mode)), path)
 
     def test_link_hostnames(self):
         registry = self.registry()
@@ -1519,7 +1581,13 @@ class CliTest(unittest.TestCase):
 
         def renewed(_registry, sans):
             steps.append(("renew", sans))
-            return "20261120-120000"
+            stamp = "20261120-120000"
+            for path in (_registry.key, _registry.cert):
+                if os.path.exists(path):
+                    os.replace(path, f"{path}.bak-{stamp}")
+                with open(path, "w") as handle:
+                    handle.write("new certificate\n")
+            return stamp
 
         def reloaded():
             steps.append("reload")
@@ -1585,6 +1653,9 @@ class CliTest(unittest.TestCase):
         self.assertEqual(steps[1:], ["reload"])                             # no grant, no deployment
         self.assertIn("nginx does not take the new certificate (nginx: [emerg] cannot load certificate)",
                       flat(text))
+        self.assertIn("the new certificate remains on disk", flat(text))
+        self.assertIn("restore the prior files by moving", flat(text))
+        self.assertIn("nginx.crt.bak-20261120-120000", flat(text))
         self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
 
     def test_add_with_a_ca_certificate_stops_before_the_grant(self):
@@ -1725,7 +1796,13 @@ class CliTest(unittest.TestCase):
 
         def renewed(_registry, sans):
             steps.append(("renew", sans))
-            return "20261120-120000"
+            stamp = "20261120-120000"
+            for path in (_registry.key, _registry.cert):
+                if os.path.exists(path):
+                    os.replace(path, f"{path}.bak-{stamp}")
+                with open(path, "w") as handle:
+                    handle.write("new certificate\n")
+            return stamp
 
         def reloaded():
             steps.append("reload")
@@ -1762,6 +1839,8 @@ class CliTest(unittest.TestCase):
         code, text, _steps = self.cert_cli(info=None)
         self.assertEqual(code, 0, text)
         self.assertIn("Certificate: none (", flat(text))
+        self.assertIn(f"Certificate:none({sensors.Registry(self.repo).cert}ismissingorempty)",
+                      re.sub(r"\s+", "", flat(text)))
         self.assertIn("is missing or empty); tpot sensors cert --renew issues one.", flat(text))
 
     def test_renew_refuses_a_ca_certificate(self):
@@ -1769,9 +1848,17 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 2, text)
         self.assertEqual(steps, [])
         folder = os.path.join(self.repo, "data", "nginx", "cert")
-        self.assertIn(f"The certificate of this HIVE is issued by Example Root CA; T-Pot does not replace it. "
-                      f"Renew it at that CA, or move nginx.crt and nginx.key ({folder}) aside, then tpot sensors "
-                      f"cert --renew issues a self-signed one (--add names its addresses).", flat(text))
+        self.assertIn(sensors.ca_renew_refusal(cert(["IP:192.168.5.15"], self_signed=False), folder), flat(text))
+
+    def test_cert_cli_reads_certificate_metadata_once_and_passes_those_sans_through(self):
+        info = cert(["IP:192.168.5.15"])
+        with mock.patch.object(sensors, "cert_info", return_value=info) as read_info, \
+                mock.patch.object(sensors, "cert_sans", side_effect=AssertionError("SANs must come from CertInfo")):
+            code, text = self.run_cli("sensors", "cert", "--renew", "--yes", "--no-restart", "--add",
+                                      "hive.example.org")
+        self.assertEqual(code, 0, text)
+        self.assertEqual(read_info.call_count, 1)
+        self.assertIn("new certificate covers: IP:192.168.5.15, DNS:hive.example.org", flat(text))
 
     def test_renew_reloads_nginx(self):
         from tpotctl import ops
@@ -1794,9 +1881,10 @@ class CliTest(unittest.TestCase):
         code, text, steps = self.cert_cli("--renew", "--yes", info=old,
                                           reload=ops.OpsError('nginx: [emerg] cannot load certificate'))
         self.assertEqual(code, 1, text)
-        self.assertIn("nginx does not take the new certificate (nginx: [emerg] cannot load certificate); the old "
-                      "ones are kept as nginx.crt.bak-20261120-120000 and nginx.key.bak-20261120-120000, put them "
-                      "back before T-Pot is restarted.", flat(text))
+        self.assertIn("nginx does not take the new certificate (nginx: [emerg] cannot load certificate); the new "
+                      "certificate remains on disk; restore the prior files by moving", flat(text))
+        self.assertIn("nginx.crt.bak-20261120-120000", flat(text))
+        self.assertIn("nginx.key.bak-20261120-120000", flat(text))
         code, text, steps = self.cert_cli("--renew", "--yes", "--no-restart", info=old)
         self.assertEqual(code, 0, text)
         self.assertEqual(steps, [("renew", ["IP:192.168.5.15"])])             # no reload
@@ -1842,6 +1930,61 @@ class CliTest(unittest.TestCase):
         self.assertEqual(children[0].args[0], "ansible-playbook")
         self.assertIn("sensor-new-fox has the new certificate.", flat(text))
 
+    def test_no_restart_still_distributes_the_new_certificate_without_reloading_nginx(self):
+        registry = sensors.Registry(self.repo)
+        registry.grant("sensor-new-fox", "pw")
+        registry.record(sensors.Sensor("sensor-new-fox", host="10.0.0.5", ssh_user="debian",
+                                       hive_address="192.168.1.2", source="deployed"))
+        steps = []
+        with open(registry.cert, "rb") as handle:
+            original = handle.read()
+
+        def renewed(_registry, sans):
+            steps.append(("renew", sans))
+            backup = f"{registry.cert}.bak-20261120-120000"
+            os.replace(registry.cert, backup)
+            with open(backup, "rb") as handle:
+                self.assertEqual(handle.read(), original)
+            with open(registry.cert, "wb") as handle:
+                handle.write(b"new certificate")
+            return "20261120-120000"
+
+        def copied(command, **_kwargs):
+            self.assertEqual(command[0], "ansible-playbook")
+            with open(registry.cert, "rb") as handle:
+                self.assertEqual(handle.read(), b"new certificate")
+            steps.append("distribute")
+            return 0
+
+        from tpotctl import ops
+        with mock.patch.object(sensors, "cert_info", return_value=cert(["IP:192.168.5.15"])), \
+                mock.patch.object(sensors, "renew_cert", side_effect=renewed), \
+                mock.patch.object(ops, "nginx_reload", side_effect=AssertionError("nginx must not reload")), \
+                mock.patch("tpotctl.cli.call", side_effect=copied):
+            code, text = self.run_cli("sensors", "cert", "--renew", "--yes", "--no-restart", "--distribute")
+        self.assertEqual(code, 0, text)
+        self.assertEqual(steps, [("renew", ["IP:192.168.5.15", "IP:192.168.1.2"]), "distribute"])
+        self.assertIn("nginx uses the new certificate from the next start of T-Pot on (tpot restart).", flat(text))
+        with open(registry.cert, "wb") as handle:
+            handle.write(original)
+
+    def test_reload_failure_without_old_files_does_not_claim_backups_exist(self):
+        from tpotctl import ops
+        registry = sensors.Registry(self.repo)
+        for path in (registry.cert, registry.key):
+            if os.path.exists(path):
+                os.unlink(path)
+        code, text, _steps = self.cert_cli("--renew", "--yes", "--add", "192.168.1.2",
+                                          reload=ops.OpsError("nginx: [emerg] cannot load certificate"),
+                                          info=None)
+        self.assertEqual(code, 1, text)
+        self.assertIn("the new certificate remains on disk", flat(text))
+        self.assertIn("no prior certificate or key files were present to restore", flat(text))
+        self.assertIn("no prior certificate or key files were present to keep", flat(text))
+        self.assertNotIn("old ones are kept", flat(text))
+        self.assertNotIn("old one is kept", flat(text))
+        self.assertNotIn("nginx.crt.bak-20261120-120000", flat(text))
+
     def test_renew_refuses_a_certificate_it_cannot_read(self):
         crt = os.path.join(self.repo, "data", "nginx", "cert", "nginx.crt")
         with open(crt, "rb") as handle:
@@ -1852,11 +1995,12 @@ class CliTest(unittest.TestCase):
         self.assertEqual(steps, [])
         self.assertIn("cannot read the certificate", text)
         self.assertNotIn("Traceback", text)
-        if shutil.which("openssl"):                       # the garbage nginx.crt of the checkout, read for real
-            with mock.patch.object(sensors, "renew_cert", side_effect=AssertionError("not replaced")):
-                code, text = self.run_cli("sensors", "cert", "--renew", "--yes")
-            self.assertEqual(code, 1, text)
-            self.assertIn("cannot read the certificate", flat(text))
+        with mock.patch.object(sensors, "cert_info", side_effect=sensors.SensorsError(
+                f"cannot read the certificate {crt}: Could not find or decode certificate")), \
+                mock.patch.object(sensors, "renew_cert", side_effect=AssertionError("not replaced")):
+            code, text = self.run_cli("sensors", "cert", "--renew", "--yes")
+        self.assertEqual(code, 1, text)
+        self.assertIn("cannot read the certificate", flat(text))
         with open(crt, "rb") as handle:
             self.assertEqual(handle.read(), before)
 
@@ -2024,6 +2168,16 @@ class SensorsPaneTest(AsyncTestCase):
             self.assertNotIn("expires", text)
             self.assertEqual(paths[-1], sensors.Registry(repo).cert)
 
+    async def test_missing_certificate_summary_names_the_registry_path(self):
+        repo, backend, _paths = self.cert_backend(None)
+        app = self.sensors_page(backend, [])
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause(0.5)
+            app.goto("sensors")
+            await pilot.pause(0.4)
+            text = re.sub(r"\s+", "", str(app.query_one("#sensors-info").render()))
+            self.assertIn(f"Certificate:none({sensors.Registry(repo).cert}ismissingorempty)", text)
+
     async def test_a_certificate_that_ends_soon_is_a_warning(self):
         info = cert(["IP:192.0.2.5"], days=10)
         _repo, backend, _paths = self.cert_backend(info)
@@ -2047,6 +2201,27 @@ class SensorsPaneTest(AsyncTestCase):
             self.assertIn(str(problem), str(app.query_one("#sensors-info").render()))
             self.assertGreater(app.query_one("#sensors-table").row_count, 0)
 
+    async def test_a_valid_certificate_stays_visible_when_later_sensor_reads_fail(self):
+        info = cert(["IP:192.0.2.5"])
+        for failing_read in ("status", "file_only"):
+            with self.subTest(failing_read=failing_read):
+                repo, backend, _paths = self.cert_backend(info)
+                if failing_read == "status":
+                    backend.sensor_status = mock.Mock(side_effect=sensors.SensorsError("status unavailable"))
+                else:
+                    registry = backend.sensors()
+                    registry.file_only = mock.Mock(side_effect=sensors.SensorsError("file-only unavailable"))
+                    backend.sensors = lambda: registry
+                app = self.sensors_page(backend, [])
+                async with app.run_test(size=(100, 35)) as pilot:
+                    await pilot.pause(0.5)
+                    app.goto("sensors")
+                    await pilot.pause(0.4)
+                    text = str(app.query_one("#sensors-info").render())
+                    self.assertIn("Certificate: ECDSA P-384", text)
+                    self.assertIn("192.0.2.5", text)
+                    self.assertIn("unavailable", text)
+
     async def test_renew_renews_and_sends_a_self_signed_certificate(self):
         _repo, backend, _paths = self.cert_backend(cert(["IP:192.0.2.5"]))
         commands = []
@@ -2059,6 +2234,25 @@ class SensorsPaneTest(AsyncTestCase):
             await pilot.pause(0.3)
             from tpotctl import app as tapp
             self.assertEqual(commands, [[tapp.LAUNCHER, "sensors", "cert", "--renew", "--distribute"]])
+
+    async def test_renew_button_allows_a_missing_certificate_but_blocks_a_read_error(self):
+        from tpotctl import app as tapp
+        for info, expected_commands, expected_problem in (
+                (None, [[tapp.LAUNCHER, "sensors", "cert", "--renew", "--distribute"]], ""),
+                (sensors.SensorsError("cannot read the certificate nginx.crt: no public key"), [], "no public key")):
+            with self.subTest(info=info):
+                _repo, backend, _paths = self.cert_backend(info)
+                commands = []
+                app = self.sensors_page(backend, commands)
+                async with app.run_test(size=(100, 35)) as pilot:
+                    await pilot.pause(0.5)
+                    app.goto("sensors")
+                    await pilot.pause(0.4)
+                    app.query_one("#sensor-cert-renew").press()
+                    await pilot.pause(0.3)
+                    self.assertEqual(commands, expected_commands)
+                    if expected_problem:
+                        self.assertIn(expected_problem, str(app.query_one("#sensors-info").render()))
 
     async def test_renew_refuses_a_certificate_of_a_ca(self):
         from tpotctl.screens.dialogs import NoticeDialog
