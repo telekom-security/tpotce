@@ -1948,6 +1948,98 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("sensor-old-otter", sensors.Registry(repo).records)
             self.assertTrue(any("heartbeat refused" in note and "access" in note for note in notes), notes)
 
+    def cert_backend(self, info):
+        """The heartbeat backend whose nginx.crt is `info` (a CertInfo, None, or an exception to raise)."""
+        repo, backend = self.heartbeat_backend()
+        paths = []
+
+        def cert_info(path):
+            paths.append(path)
+            if isinstance(info, BaseException):
+                raise info
+            return info
+
+        backend.cert_info = cert_info
+        return repo, backend, paths
+
+    def sensors_page(self, backend, commands):
+        from tpotctl import app as tapp
+        app = tapp.TpotApp(backend=backend, runner=lambda command, cwd=None: commands.append(command) or 0)
+        return app
+
+    async def test_the_page_shows_the_certificate_and_suggests_ecdsa(self):
+        info = cert(["IP:192.0.2.5", "DNS:hive.test"], key="RSA 2048")
+        repo, backend, paths = self.cert_backend(info)
+        app = self.sensors_page(backend, [])
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause(0.5)
+            app.goto("sensors")
+            await pilot.pause(0.4)
+            text = str(app.query_one("#sensors-info").render())
+            date = info.not_after.strftime("%Y-%m-%d")
+            self.assertIn(f"Certificate: RSA 2048, self-signed, valid until {date}, covers IP:192.0.2.5, "
+                          f"DNS:hive.test", text)
+            self.assertIn("An ECDSA certificate costs this HIVE far less CPU per connection than RSA: "
+                          "Renew certificate below.", text)
+            self.assertNotIn("expires", text)
+            self.assertEqual(paths[-1], sensors.Registry(repo).cert)
+
+    async def test_a_certificate_that_ends_soon_is_a_warning(self):
+        info = cert(["IP:192.0.2.5"], days=10)
+        _repo, backend, _paths = self.cert_backend(info)
+        app = self.sensors_page(backend, [])
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause(0.5)
+            app.goto("sensors")
+            await pilot.pause(0.4)
+            date = info.not_after.strftime("%Y-%m-%d")
+            self.assertIn(f"The certificate expires in 10 days ({date}); renew it: Renew certificate below.",
+                          str(app.query_one("#sensors-info").render()))
+
+    async def test_a_certificate_that_cannot_be_read_keeps_the_table(self):
+        problem = sensors.SensorsError("cannot read the certificate nginx.crt: no public key")
+        _repo, backend, _paths = self.cert_backend(problem)
+        app = self.sensors_page(backend, [])
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause(0.5)
+            app.goto("sensors")
+            await pilot.pause(0.4)
+            self.assertIn(str(problem), str(app.query_one("#sensors-info").render()))
+            self.assertGreater(app.query_one("#sensors-table").row_count, 0)
+
+    async def test_renew_renews_and_sends_a_self_signed_certificate(self):
+        _repo, backend, _paths = self.cert_backend(cert(["IP:192.0.2.5"]))
+        commands = []
+        app = self.sensors_page(backend, commands)
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause(0.5)
+            app.goto("sensors")
+            await pilot.pause(0.4)
+            app.query_one("#sensor-cert-renew").press()
+            await pilot.pause(0.3)
+            from tpotctl import app as tapp
+            self.assertEqual(commands, [[tapp.LAUNCHER, "sensors", "cert", "--renew", "--distribute"]])
+
+    async def test_renew_refuses_a_certificate_of_a_ca(self):
+        from tpotctl.screens.dialogs import NoticeDialog
+        info = cert(["IP:192.0.2.5"], self_signed=False, issuer="Example Root CA")
+        repo, backend, _paths = self.cert_backend(info)
+        commands = []
+        app = self.sensors_page(backend, commands)
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause(0.5)
+            app.goto("sensors")
+            await pilot.pause(0.4)
+            app.query_one("#sensor-cert-renew").press()
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, NoticeDialog)
+            folder = os.path.dirname(sensors.Registry(repo).cert)
+            self.assertIn(sensors.ca_renew_refusal(info, folder), str(app.screen.query_one("#notice-body").render()))
+            self.assertEqual(commands, [])
+            await pilot.press("escape")
+            await pilot.pause(0.2)
+            self.assertNotIsInstance(app.screen, NoticeDialog)
+
     async def test_delayed_status_read_cannot_restore_removed_registry_entry(self):
         import threading
         from tpotctl import app as tapp

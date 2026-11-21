@@ -73,6 +73,35 @@ class QuitDialog(ConfirmDialog):
     YES_KEY = "q"
 
 
+class NoticeDialog(NavModal):
+    """A text to read and one Back; esc or Back closes it."""
+
+    BINDINGS = [Binding("escape", "close", "Back")]
+
+    def __init__(self, title: str, text: str):
+        super().__init__()
+        self.title_text, self.text = title, text
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="dialog compact") as dialog:
+            yield DialogTitle(self.title_text)
+            with NavScroll():
+                yield Static(Text(self.text), id="notice-body")
+            with Horizontal(classes="actions"):
+                yield Button("Back", id="no")
+        dialog.border_subtitle = "esc back"
+
+    def on_mount(self) -> None:
+        self.query_one("#no", Button).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        self.dismiss(None)
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+
 class ChoiceDialog(NavModal):
     """Pick one of several options, dismissed with its index or None."""
 

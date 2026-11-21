@@ -479,6 +479,9 @@ class ScreensTest(unittest.IsolatedAsyncioTestCase):
             "ports": lambda: customizer.PortsDialog(state(), "cowrie"),
             # the detail of a honeypot of the last check (Checks page): a long text, it scrolls
             "check-detail": lambda: tapp.CheckDetailDialog(check(), check()["honeypots"][0]),
+            # a notice with one Back (the Sensors page: a CA certificate T-Pot does not renew)
+            "notice": lambda: dialogs.NoticeDialog("Not renewed", "The certificate of this HIVE is issued by a CA. "
+                                                   * 30),
         }
 
     async def check_screen(self, label, make):

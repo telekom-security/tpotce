@@ -93,6 +93,11 @@ class Backend:
         from tpotctl import sensors
         return sensors.fetch_status(days)
 
+    def cert_info(self, path: str):
+        """nginx.crt of this HIVE (sensors.cert_info): a CertInfo, None for none, SensorsError if unreadable."""
+        from tpotctl import sensors
+        return sensors.cert_info(path)
+
     def system(self):
         from tpotctl import system
         if not hasattr(self, "_meter"):
@@ -1728,6 +1733,9 @@ class SensorsPane(Vertical):
         self.found = []
         self.reading = self.reload_pending = False
         self.shown = None
+        # nginx.crt as the last read found it: a CertInfo, None for none, else why it cannot be read;
+        # cert_path is None until a read got as far as the registry
+        self.cert, self.cert_path = None, None
         self.query_one("#sensors-import-actions", Horizontal).display = False
         self.load()
         self.set_interval(30.0, lambda: self.load(force=False))
@@ -1749,22 +1757,28 @@ class SensorsPane(Vertical):
     @work(thread=True, exclusive=True, group="sensors")
     def fetch(self, stamp) -> None:
         from tpotctl import sensors as tsensors
+        cert = None
         try:
             registry = self.app.backend.sensors()
+            try:
+                cert = self.app.backend.cert_info(registry.cert)
+            except tsensors.SensorsError as err:
+                cert = str(err)
             status = self.app.backend.sensor_status()
             found = registry.file_only()
             problem = ""
         except tsensors.SensorsError as err:
             registry, status, found, problem = None, None, [], str(err)
-        self.app.call_from_thread(self.finish_fetch, stamp, registry, status, problem, found)
+        self.app.call_from_thread(self.finish_fetch, stamp, registry, status, problem, found, cert)
 
-    def finish_fetch(self, stamp, registry, status, problem, found) -> None:
+    def finish_fetch(self, stamp, registry, status, problem, found, cert=None) -> None:
         from tpotctl import sensors as tsensors
         self.reading = False
         if self.reload_pending or stamp != self.app.backend.config_stamp():
             self.reload_pending = False
             self.load()
             return
+        self.cert, self.cert_path = cert, registry.cert if registry is not None else None
         if registry is not None:
             try:
                 # Only a current snapshot may write metadata; a delayed read must not undo a removal.
@@ -1817,9 +1831,24 @@ class SensorsPane(Vertical):
         for hostname, seen in sorted(status.unlinked.items()):
             info.append(f"\nEvents from {hostname} carry no sensor name: older ones, or this HIVE does not pass it "
                         f"on yet (update T-Pot).", style=theme.color("mist"))
+        self.show_cert(info)
         if info.plain.startswith("\n"):
             info = info[1:]
         self.query_one("#sensors-info", Static).update(info)
+
+    def show_cert(self, info: Text) -> None:
+        """The lines on nginx.crt below the notes of the page, with their colours."""
+        from datetime import datetime, timezone
+        from tpotctl import sensors as tsensors
+        if self.cert_path is None:
+            return
+        if isinstance(self.cert, str):
+            info.append(f"\n{self.cert}", style=theme.color("error"))
+            return
+        styles = {"warn": theme.color("warn"), "hint": theme.color("mist")}
+        for level, line in tsensors.cert_summary(self.cert, datetime.now(timezone.utc), "Renew certificate below",
+                                                 path=self.cert_path):
+            info.append(f"\n{line}", style=styles.get(level, ""))
 
     def selected(self) -> str:
         table = self.query_one(DataTable)
@@ -1871,7 +1900,13 @@ class SensorsPane(Vertical):
                                                yes="Take over"),
                                  lambda yes: self.take_over(registry, names) if yes else None)
         elif button == "sensor-cert-renew":
-            self.app.runner([LAUNCHER, "sensors", "cert", "--renew"], cwd=REPO_DIR)
+            if isinstance(self.cert, tsensors.CertInfo) and not self.cert.self_signed:
+                # tpot sensors cert --renew refuses it too, there is nothing to start
+                from tpotctl.screens.dialogs import NoticeDialog
+                self.app.push_screen(NoticeDialog("Not renewed", tsensors.ca_renew_refusal(
+                    self.cert, os.path.dirname(self.cert_path))))
+                return
+            self.app.runner([LAUNCHER, "sensors", "cert", "--renew", "--distribute"], cwd=REPO_DIR)
             self.load()
         elif button == "sensor-cert-send":
             self.app.runner([LAUNCHER, "sensors", "cert", "--distribute"], cwd=REPO_DIR)

@@ -74,11 +74,15 @@ if textual:
         def sensors(self):
             from tpotctl import sensors
             return mock.Mock(spec=sensors.Registry, records={}, migrated=[], env={"TPOT_VERSION": "24.04.2"},
+                             cert="/home/t/tpotce/data/nginx/cert/nginx.crt",
                              **{"sensors.return_value": [], "file_only.return_value": []})
 
         def sensor_status(self, days=7):
             from tpotctl import sensors
             return sensors.Status()
+
+        def cert_info(self, path):
+            return None
 
         def host_address(self):
             return "192.0.2.5"
