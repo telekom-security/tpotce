@@ -1800,9 +1800,10 @@ class SensorsPane(Vertical):
         info = Text()
         self.query_one("#sensors-import-actions", Horizontal).display = bool(self.found)
         self.query_one("#sensor-import", Button).label = take_over_label(len(self.found), "sensor")
-        self.query_one("#sensor-sudo", Button).disabled = True
-        self.query_one("#sensor-update", Button).disabled = True
+        # Each button gets its final value once: disabling a focused button, even for a moment, takes its focus.
         if registry is None:
+            self.query_one("#sensor-sudo", Button).disabled = True
+            self.query_one("#sensor-update", Button).disabled = True
             table.sync_rows([])
             info.append(problem, style=theme.color("error"))
             self.query_one("#sensors-info", Static).update(info)

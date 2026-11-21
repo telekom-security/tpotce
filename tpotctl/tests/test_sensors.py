@@ -1912,6 +1912,26 @@ class SensorsPaneTest(AsyncTestCase):
                 self.assertIn("offline since", table.get_row("sensor-old-otter")[5].plain)
                 self.assertIn("Sensors: 0 online, 1 offline, 1 behind", str(app.query_one("#status-info").render()))
 
+    async def test_a_repaint_keeps_the_focus_on_the_sudo_and_update_buttons(self):
+        """The page repaints every 2 s: a button that stays enabled keeps the focus, the arrows go on from it."""
+        from tpotctl import app as tapp
+        repo, backend = self.heartbeat_backend()
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause(0.5)
+            app.goto("sensors")
+            await pilot.pause(0.4)
+            pane = app.query_one("#sensors")
+            for button in ("#sensor-sudo", "#sensor-update"):
+                with self.subTest(button=button):
+                    widget = app.query_one(button)
+                    self.assertFalse(widget.disabled)
+                    widget.focus()
+                    await pilot.pause()
+                    pane.repaint()
+                    await pilot.pause()
+                    self.assertIs(app.focused, widget)
+
     async def test_refused_sensor_row_and_status_count(self):
         from tpotctl import app as tapp, theme
         repo, backend = self.heartbeat_backend()
