@@ -243,7 +243,7 @@ Use a dedicated host or VM, preferably Debian 13, without unrelated production s
 | Hive       | 16GB | 256GB SSD | As a rule of thumb, the more honeypots, sensors & data, the more RAM and storage is needed.      |
 | Sensor     | 8GB  | 128GB SSD | Since honeypot logs are persisted (~/tpotce/data) for 30 days, storage depends on attack volume. |
 
-A **Sensor** no longer runs Logstash, whose Java process alone took about 1.6 GiB of RAM there. Fluent Bit sends its logs instead, within a container limit of 256 MB, and keeps what the **Hive** has not taken yet on disk (up to `TPOT_SENSOR_BUFFER_MB`, 512 MB by default, see [Sensor Logs](#sensor-logs)). The **Hive** now parses and enriches the events of its sensors as well, so its CPU load grows with the event rate of its sensors.
+A **Sensor** no longer runs Logstash, whose Java process alone took about 1.6 GiB of RAM there. Fluent Bit sends its logs instead, within a container limit of 512 MB, and keeps what the **Hive** has not taken yet on disk (up to `TPOT_SENSOR_BUFFER_MB`, 512 MB by default, see [Sensor Logs](#sensor-logs)). The **Hive** now parses and enriches the events of its sensors as well, so its CPU load grows with the event rate of its sensors.
 
 T-Pot does require ...
 - an IPv4 address via DHCP or statically assigned
@@ -836,7 +836,7 @@ A distributed T-Pot is one **Hive** and any number of **Sensors**. Install the *
 | `tpot sensors add` | deploys a sensor over SSH (`./deploy.sh` does the same) |
 | `tpot sensors remove NAME` | revokes access and deletes the current heartbeat status, retaining history |
 | `tpot sensors set NAME --host … --ssh-user …` | adds where a sensor is, i.e. for sensors of earlier releases |
-| `tpot sensors cert` | shows the addresses the certificate of the **Hive** covers, `--renew` issues it anew, `--distribute` copies it to the sensors |
+| `tpot sensors cert` | shows the certificate of the **Hive** (key, issuer, end, the addresses it covers), `--renew` issues a self-signed one anew and reloads nginx, `--distribute` copies it to the sensors |
 | `tpot sensors import` | gives the sensors of `lswebpasswd` / `lswebpasswd.lost` that `LS_WEB_USER` does not name their access back |
 | `tpot sensors update [NAME ...] [--all] [--parallel N|all] [--dry-run] [-y] [--become-file FILE|--no-become-pass] [--accept-data-loss|--accept-data-loss-file FILE] [--resume|--discard]` | prepares and coordinates sensor updates from the **Hive** |
 
@@ -860,12 +860,18 @@ Fluent Bit on a **Sensor** reads the logs of its honeypots and sends every line 
 enriches these lines like the logs of the **Hive** itself, so a sensor's events in `logstash-*` look the same.
 Every event names its sensor in `t-pot_sensor` and the log file it came from in `t-pot_log_path`.
 
-Before it sends anything, Fluent Bit asks the **Hive** whether it takes this format. An older **Hive**, or one whose
-Logstash is not ready yet, gets nothing: Fluent Bit reads no logs meanwhile, asks again every 5 minutes and
-`docker logs fluentbit` says why it waits. nginx of the **Hive** answers these questions at most once a second per
-address (burst 5) and 10 times a second for all sensors together (burst 20); beyond that it answers HTTP 429 and
-`docker logs fluentbit` says that the **Hive** is busy (`The HIVE is busy (HTTP 429), next probe in 300 s.`), as
-`update.sh` on the **Sensor** does. Only the logs since the last T-Pot start wait on the **Sensor**: every
+Before it sends anything, Fluent Bit asks the **Hive** whether it takes this format, in two steps: first without the
+login of the sensor, and only a **Hive** of this release, whose nginx answers that with HTTP 401 and
+`X-TPot-Ingest: login`, is asked again with it, so an older **Hive** never gets the login. An older **Hive**, one whose
+Logstash is not ready yet, or one that does not accept the login of the sensor (`TPOT_HIVE_USER`) gets nothing:
+Fluent Bit reads no logs meanwhile, asks again every 5 minutes and `docker logs fluentbit` says why it waits.
+`update.sh` on the **Sensor** asks the same way and warns in its summary. nginx of the **Hive** answers these
+questions at most once a second per address (burst 5), before it checks the login; beyond that it answers HTTP 429,
+`docker logs fluentbit` says that the **Hive** is busy (i.e. `The HIVE is busy (HTTP 429), next probe in 27 s.`) and
+Fluent Bit asks again after 15 to 45 s, at random. Sensors behind one NAT share this limit, as nginx sees one
+address for all of them. A question with the name of a known sensor costs nginx one bcrypt check of its password
+(cost 5, about 1.4 ms per request), one with an unknown name none. Only the logs since the last T-Pot start wait on
+the **Sensor**: every
 T-Pot start (also the daily reboot) rotates the logs, so a restart of the **Sensor** before the **Hive** answers
 leaves the earlier lines in the rotated log files on the **Sensor**, they are not sent.
 While the **Hive** cannot be reached once Fluent Bit sends, it keeps the lines on the disk of the **Sensor**
@@ -873,8 +879,8 @@ While the **Hive** cannot be reached once Fluent Bit sends, it keeps the lines o
 Beyond it the oldest lines are dropped. A single burst of lines larger than the limit before the first send loses
 its newest lines, the log of Fluent Bit names it (`no available chunk`). When the **Hive** answers again, most of
 the lines wait no longer than a few minutes; lines Fluent Bit already retried often during a long outage wait for
-their next retry and can arrive up to about 35 minutes later (each retry waits longer, at most 2000 s, which spares
-a **Hive** that comes back under load).
+their next retry and can arrive up to about 35 minutes later. Each retry waits longer, at most 2000 s, which spares
+a **Hive** that comes back under load.
 `TPOT_SENSOR_BUFFER_MB` takes 64 to 1048576 (Fluent Bit counts 1 MB as 10^6 bytes, `tpot env set` or the
 *Settings* page); the buffer shares the disk with the logs of the honeypots. A `docker-compose.yml` of your own
 needs the line `FLB_STORAGE_LIMIT=${TPOT_SENSOR_BUFFER_MB:-512}M` in the `environment` of `fluentbit`, without it
@@ -937,15 +943,25 @@ With `TPOT_KIBANA_OBJECTS=keep`, add the dashboard explicitly with `tpot elastic
 or the *Elastic* page. This adds missing objects without overwriting yours.
 
 ### Planning and Certificates
-The **Sensor** checks the **Hive** against a copy of its certificate (`~/tpotce/data/hive.crt` on the **Sensor**), so the certificate has to cover the address the **Sensor** connects to. **T-Pot Init** only creates a self-signed certificate for one IP of the **Hive** host, which suits simple setups. A **Hive** reachable on more than one address (i.e. RFC 1918 and a public NAT IP) or a domain name needs these as SANs (Subject Alternative Name), otherwise Fluent Bit on the **Sensor** cannot validate the connection. For more details see [issue #1543](https://github.com/telekom-security/tpotce/issues/1543).
+The **Sensor** checks the **Hive** against `~/tpotce/data/hive.crt`, a copy of `nginx.crt` of the **Hive** (`~/tpotce/data/nginx/cert/nginx.crt`), so the certificate has to cover the address the **Sensor** connects to. **T-Pot Init** only creates a self-signed certificate for one IP of the **Hive** host, which suits simple setups. A **Hive** reachable on more than one address (i.e. RFC 1918 and a public NAT IP) or a domain name needs these as SANs (Subject Alternative Name), otherwise Fluent Bit on the **Sensor** cannot validate the connection. For more details see [issue #1543](https://github.com/telekom-security/tpotce/issues/1543).
 
-`tpot sensors add` checks this for the address you give and offers to renew the certificate if it is missing. To do it ahead of time:
+New certificates are ECDSA P-384, which costs the **Hive** far less CPU per connection than the RSA 8192 key of earlier releases. An existing **Hive** keeps its RSA certificate until you run `tpot sensors cert --renew --distribute`; `tpot sensors cert` and the *Sensors* page suggest it.
+
+`tpot sensors add` checks the certificate for the address you give and offers to issue it anew if it does not cover it. To do it ahead of time:
 ```
-tpot sensors cert                                            # the addresses it covers now
+tpot sensors cert                                            # the certificate and the addresses it covers now
 tpot sensors cert --renew --add my.primary.domain --add 1.2.3.4
 tpot sensors cert --distribute                               # copy it to the sensors you have
 ```
-`--renew` keeps the addresses the certificate has, adds the ones of `--add` and those the sensors use, keeps the old certificate as `nginx.crt.bak-<time>` and restarts T-Pot. Every sensor needs the new certificate afterwards, `--distribute` copies it over SSH and restarts Fluent Bit there (Logstash on a sensor of an older release; it warns about a sensor of this release whose `docker-compose.yml` still runs Logstash; it asks for the sudo password on the sensors, `--no-become-pass` if they need none).
+`tpot sensors cert` shows the key of the certificate, whether it is self-signed or which CA issued it, its end and the addresses it covers, and warns 30 days before it expires; the *Sensors* page shows the same. `--renew` issues a new self-signed certificate (also when `nginx.crt` is missing or empty; one it cannot read it never replaces): it keeps the addresses the certificate has, adds the ones of `--add` and those the sensors use, keeps the old files as `nginx.crt.bak-<time>` and `nginx.key.bak-<time>` and reloads nginx, the honeypots go on running. Without a running nginx, T-Pot uses the new certificate from its next start on; with `--no-restart` nginx is not reloaded and takes it from the next start of T-Pot on (`tpot restart`). Browsers warn about the new certificate once more, and every sensor needs it: `--distribute` copies it over SSH and restarts Fluent Bit there (Logstash on a sensor of an older release; it warns about a sensor of this release whose `docker-compose.yml` still runs Logstash; it asks for the sudo password on the sensors, `--no-become-pass` if they need none). Sensors without a host, a login or access are skipped (`tpot sensors set` adds what is missing). At the end it names the sensors it skipped or did not reach with the way to do it by hand: copy `nginx.crt` of the **Hive** to `~/tpotce/data/hive.crt` on the sensor, then restart T-Pot there (`sudo systemctl restart tpot`). It exits with 1 when a sensor it tried was not reached or there was none it could try, with 0 when every sensor it tried has the new certificate. Without a certificate `--distribute` copies nothing (exit 1), `tpot sensors cert --renew --distribute` issues one and copies it. The *Renew certificate* button of the *Sensors* page runs `tpot sensors cert --renew --distribute`.
+
+The **Sensor** trusts the **Hive** by one rule, the same for Fluent Bit, its question to the **Hive** and `update.sh`: when one of the certificates in `hive.crt` is self-signed (the one of the **Hive**, or the root of your own CA appended to it), it trusts `hive.crt` alone; otherwise (a certificate of a public CA) it trusts the CA certificates of the system. Before it asks the **Hive**, the **Sensor** checks the certificate the way Fluent Bit does; a certificate it does not trust (i.e. an expired one, or a certificate of your own CA without its root) is named with the reason and the way out in `docker logs fluentbit` and in the summary of `update.sh`, and the logs wait.
+
+A certificate of a CA is never replaced by T-Pot: `--renew` refuses it (exit 2) and names its issuer, and `tpot sensors add` stops before it grants the sensor any access if it does not cover the address of the **Hive** (reissue it at that CA with this address, or give `--hive-address` with an address it covers). To use one, put it into `nginx.crt` with its full chain (and its key into `nginx.key`):
+- of a public CA (i.e. Let's Encrypt): the full chain;
+- of your own CA: the full chain and the root of that CA at its end.
+
+Then copy it to the sensors with `tpot sensors cert --distribute`. Renew it at its CA before it expires and run `tpot sensors cert --distribute` again.
 
 Without `tpot` the certificate can be changed by hand:
 ```
@@ -954,8 +970,9 @@ sudo systemctl stop tpot
 sudo openssl req \
     -nodes \
     -x509 \
-    -sha512 \
-    -newkey rsa:8192 \
+    -sha384 \
+    -newkey ec \
+    -pkeyopt ec_paramgen_curve:P-384 \
     -keyout "$HOME/tpotce/data/nginx/cert/nginx.key" \
     -out "$HOME/tpotce/data/nginx/cert/nginx.crt" \
     -days 3650 \
@@ -967,9 +984,9 @@ sudo chown tpot:tpot $HOME/tpotce/data/nginx/cert/*
 
 sudo systemctl start tpot
 ```
+Then copy `nginx.crt` to `~/tpotce/data/hive.crt` on every sensor and restart T-Pot there.
 
-The T-Pot configuration file (`.env`) does allow to disable the SSL verification of the connections from Fluent Bit on the **Sensor** to the **Hive** by setting `LS_SSL_VERIFICATION=none` on the **Sensor** (the default is `full`). For security reasons this is only recommended for lab or test environments.<br><br>
-If you choose to use a valid certificate for the **Hive** signed by a CA (i.e. Let's Encrypt), Fluent Bit, and therefore the **Sensor**, should have no problems to connect and transmit its logs to the **Hive**.
+The T-Pot configuration file (`.env`) does allow to disable the SSL verification of the connections from Fluent Bit on the **Sensor** to the **Hive** by setting `LS_SSL_VERIFICATION=none` on the **Sensor** (the default is `full`). For security reasons this is only recommended for lab or test environments. Such a **Sensor** checks no certificate, nothing of the above affects it.
 
 ### Deploying Sensors
 Once you have rebooted the **Sensor** as instructed by the installer, log into the **Hive** and run:
@@ -978,7 +995,7 @@ tpot sensors add
 ```
 It asks for the address of the **Sensor** (an IP address or a host name, an alias of your `~/.ssh/config` too), the user T-Pot was installed with there (never `tpot`: that name belongs to the containers and the installer stops on it) and the address the **Sensor** reaches the **Hive** on (proposed from the route to the sensor), or take them as options: `--host`, `--ssh-user`, `--hive-address`, `--ssh-port` (default `64295`, i.e. for a sensor behind NAT), `--no-become-pass` (sudo on the sensor needs no password), `--yes` (do not ask). Then it
 1. checks that it can log in with an SSH key on port `64295`, and offers to create a key (`ssh-keygen`) and copy it to the **Sensor** (`ssh-copy-id`, you enter the password of the sensor user once),
-2. checks the certificate of the **Hive** covers the address of the **Hive** (see [Planning and Certificates](#planning-and-certificates)),
+2. checks the certificate of the **Hive** covers the address of the **Hive** (see [Planning and Certificates](#planning-and-certificates)): a self-signed one that does not is issued anew after a question and nginx is reloaded, a certificate of a CA that does not stops it here,
 3. creates the access of the sensor (a name like `sensor-<adjective>-<noun>` and a random password, added to `LS_WEB_USER` of the **Hive**),
 4. runs the Ansible playbook `installer/install/deploy.yml` on the **Sensor**: it stops T-Pot there, copies the certificate, switches to the `SENSOR` edition, sets `TPOT_TYPE`, `TPOT_HIVE_USER` and `TPOT_HIVE_IP` and reboots the **Sensor** (Ansible asks for the sudo password on it),
 5. records the sensor and shows its password once - the **Sensor** has it already, keep it only if you want to set the **Sensor** up again by hand.
