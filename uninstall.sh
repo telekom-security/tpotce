@@ -212,7 +212,7 @@ if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[*]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
     # the list in words: "a, b and c", from the array, so the message names every one of them
     myLIST=$(printf '%s, ' "${mySUPPORTED_DISTRIBUTIONS[@]:0:${#mySUPPORTED_DISTRIBUTIONS[@]}-1}")
     fuUI_ERROR "Only the following distributions are supported: ${myLIST%, } and ${mySUPPORTED_DISTRIBUTIONS[${#mySUPPORTED_DISTRIBUTIONS[@]}-1]}."
-    fuUI_INFO "T-Pot runs on Linux only (Debian recommended), see the T-Pot README for host requirements."
+    fuUI_INFO "T-Pot runs on Debian 13 (Raspberry Pi OS for T-Pot Mobile), see the T-Pot README for host requirements."
     echo
     exit 1
 fi

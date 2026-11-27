@@ -73,7 +73,7 @@ class SchemaTest(unittest.TestCase):
                 self.assertIn(rule.type, self.envschema.TYPES)
                 self.assertIn(rule.section, sections)
                 self.assertTrue(rule.title)
-                self.assertIn(rule.scope, ("", "HIVE", "SENSOR"))
+                self.assertTrue(set(rule.scope) <= {"HIVE", "SENSOR", "MOBILE"})
                 for service in rule.services:
                     self.assertIn(service, services, f"{key}: no compose file runs {service}")
                 if rule.type == "enum":
@@ -133,7 +133,7 @@ class SchemaTest(unittest.TestCase):
         self.assertEqual(rule.values, ["keep", "add", "update", "overwrite"])
         self.assertTrue(rule.optional)
         self.assertEqual(rule.default, "keep")
-        self.assertEqual(rule.scope, "HIVE")
+        self.assertEqual(rule.scope, ["HIVE"])
         self.assertEqual(rule.services, ["kibana"])
         order = list(example_values())
         self.assertEqual(order.index("TPOT_KIBANA_OBJECTS"), order.index("TPOT_SENSOR_STATUS_RETENTION") + 1)
@@ -144,7 +144,7 @@ class SchemaTest(unittest.TestCase):
         rule = self.schema[key]
         self.assertEqual(example_values()[key], "30")
         self.assertEqual(rule.default, "30")
-        self.assertEqual(rule.scope, "HIVE")
+        self.assertEqual(rule.scope, ["HIVE"])
         for value, valid in (("1", True), ("30", True), ("3650", True), ("off", True), ("", True),
                              ("0", False), ("3651", False), ("30d", False), ("-1", False)):
             with self.subTest(value=value):

@@ -148,6 +148,16 @@ class EntrypointTest(unittest.TestCase):
         lines = self.calls.read_text().splitlines() if self.calls.exists() else []
         return [json.loads(line) for line in lines]
 
+    def test_mobile_waits_only_for_local_templates_and_selects_local_settings(self):
+        self.env.update(TPOT_TYPE="MOBILE", TPOT_TEMPLATE_POLL="0.1", CURL_MODE="late-failures")
+        done = self.run_entrypoint()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        names = [call["url"].split("?")[0].split("/")[-1] for call in self.requests()]
+        self.assertEqual(set(names), {"logstash", "tpot-failures"})
+        self.assertEqual(names.count("tpot-failures"), 4)
+        self.assertEqual(json.loads(self.captured.read_text())["args"],
+                         ["--path.settings", str(self.root / "usr/share/logstash/config-mobile")])
+
     def test_waits_for_templates_without_limit(self):
         self.hive("late")
         done = self.run_entrypoint()

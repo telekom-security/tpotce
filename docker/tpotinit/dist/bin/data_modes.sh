@@ -38,7 +38,12 @@ fuDATA_MODES () {
 
 # fuDATA_WEB_MODES <path>...: folders 774, files 664 (nginx conf and cert)
 fuDATA_WEB_MODES () {
-  fuDATA_CHMOD "${myDATA_WEB_MODE}" "$@"
+  local myPATH
+  for myPATH in "$@"; do
+    if [[ -e "$myPATH" || -L "$myPATH" ]]; then
+      fuDATA_CHMOD "${myDATA_WEB_MODE}" "$myPATH" || return 1
+    fi
+  done
 }
 
 # fuDATA_SAMPLE_MODES <path>...: files 440, the folders keep their modes (the samples of Dionaea).

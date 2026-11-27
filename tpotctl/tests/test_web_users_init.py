@@ -72,6 +72,63 @@ class WebUsersInitTest(unittest.TestCase):
         lost = Path(f"{path}.lost")
         return lost.read_text() if lost.exists() else None
 
+    def test_mobile_leaves_existing_and_absent_password_files_alone(self):
+        self.nginx.write_text(ALICE)
+        self.lsweb.unlink()
+        self.run_init(kind="MOBILE")
+        self.assertEqual(self.nginx.read_text(), ALICE)
+        self.assertFalse(self.lsweb.exists())
+
+    def test_first_mobile_then_first_hive_on_the_same_data(self):
+        # Run the real data-folder branch, replacing only the container/system commands.
+        text = ENTRYPOINT.read_text().split("# Data folder management\n")[1].split("# A hold of ewsposter")[0]
+        clean = r'''
+            figlet() { :; }
+            uuidgen() { echo first-uuid; }
+            openssl() {
+              while (( $# )); do case "$1" in -keyout|-out) echo generated > "$2";; esac; shift; done
+            }
+            ip() { echo 'inet 192.0.2.1/24 brd'; }
+        '''
+        text = (text.replace("/opt/tpot/bin/clean.sh", "clean").replace("/sbin/ip", "ip")
+                .replace("/opt/tpot/bin/kibana_objects.py", str(ROOT / "tpotctl/kibana_objects.py"))
+                .replace("/data", str(self.data)))
+        cleaner = (ENTRYPOINT.parent / "bin/clean.sh").read_text()
+        nginx = re.search(r"^fuNGINX \(\) \{.*?^\}", cleaner, re.M | re.S).group()
+        dispatch = next(line for line in cleaner.splitlines() if "fuNGINX" in line and "()" not in line)
+        clean += "\nchown() { :; }\nfuDATA_WEB_MODES() { :; }\n" + nginx.replace("/data/", f"{self.data}/")
+        clean += "\nclean() { " + dispatch + "\n}\n"
+        text = functions().replace(":-/data", f":-{self.data}") + "\n" + clean + text
+        env = dict(os.environ, COMPOSE=str(self.compose), WEB_USER="", LS_WEB_USER="")
+
+        def start(role):
+            done = subprocess.run(["bash", "-c", text], env=dict(env, TPOT_TYPE=role),
+                                  capture_output=True, text=True)
+            self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+            self.assertFalse(done.stderr, done.stderr)
+
+        self.nginx.unlink()
+        self.lsweb.unlink()
+        self.compose.write_text("services:\n  elasticsearch:\n")
+        start("MOBILE")
+        self.assertFalse(self.nginx.exists())
+        self.assertFalse((self.data / "nginx/cert").exists())
+        pending = self.data / "kibana_objects/pending"
+        self.assertFalse(pending.exists())
+        self.compose.write_text("services:\n  nginx:\n  kibana:\n")
+        (self.data / "uuid").write_text("keep")
+        start("HIVE")
+        cert = self.data / "nginx/cert/nginx.crt"
+        self.assertTrue(cert.exists())
+        self.assertTrue(pending.exists())
+        self.assertTrue(self.nginx.exists())
+        cert.write_text("custom")
+        pending.write_text("already pending")
+        start("HIVE")
+        self.assertEqual(cert.read_text(), "custom")
+        self.assertEqual(pending.read_text(), "already pending")
+        self.assertEqual((self.data / "uuid").read_text(), "keep")
+
     def test_the_files_come_from_the_env(self):
         out = self.run_init(web=f"{entry(ALICE)} {entry(BOB + chr(10) + chr(10))}", lsweb=entry(OTTER))
         self.assertEqual(self.nginx.read_text(), f"{ALICE}\n{BOB}\n")

@@ -68,6 +68,18 @@ class RollbackWarningTest(unittest.TestCase):
             self.assertIsNone(fleet.rollback_warning(version), version)
 
 
+class OpenTargetsTest(unittest.TestCase):
+
+    def test_open_targets(self):
+        runs = [{"phase": phase, "targets": [{"name": f"s-{phase}"}]}
+                for phase in ("running", "prepared", "completed", "aborted", "failed")]
+        runs.append({"phase": "paused", "targets": [{"name": "a"}, {"name": "b"}]})
+        self.assertEqual(fleet.open_targets(runs), {"s-running", "s-prepared", "a", "b"})
+        self.assertEqual(fleet.OPEN_PHASES, frozenset(
+            {"preparing", "prepared", "precheck_failed", "running", "paused", "aborting"}))
+        self.assertLessEqual(fleet.OPEN_PHASES, fleet.RUN_PHASES)
+
+
 class RunStoreTest(unittest.TestCase):
 
     def setUp(self):

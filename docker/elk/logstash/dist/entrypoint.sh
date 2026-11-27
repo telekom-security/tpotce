@@ -120,8 +120,6 @@ for myFILE in $myLISTBOTFILES;
 done
 
 echo
-echo "This is a T-Pot STANDARD / HIVE installation."
-echo
 echo "T-Pot type: $TPOT_TYPE"
 echo
 
@@ -144,11 +142,13 @@ fi
 # keeps the healthcheck healthy.
 function fuWAIT_TEMPLATES () {
   local myPOLL="${TPOT_TEMPLATE_POLL:-5}" myNAME myANSWER myCODE myHAS myMISSING myLAST=""
+  local myTEMPLATES=(logstash tpot-failures)
+  if [[ "$TPOT_TYPE" != MOBILE ]]; then myTEMPLATES+=(tpot-sensor-status tpot-sensor-heartbeat); fi
   touch /tmp/tpot-waiting
   trap 'kill $! 2>/dev/null; exit 143' TERM
   while true; do
     myMISSING=""
-    for myNAME in logstash tpot-sensor-status tpot-sensor-heartbeat tpot-failures; do
+    for myNAME in "${myTEMPLATES[@]}"; do
       myANSWER="$(curl -s --max-time 5 -w '\n%{http_code}' \
         "http://elasticsearch:9200/_index_template/${myNAME}?filter_path=index_templates.index_template._meta.tpot_version")"
       myCODE="${myANSWER##*$'\n'}"
@@ -176,4 +176,7 @@ function fuWAIT_TEMPLATES () {
 
 fuWAIT_TEMPLATES
 
+if [[ "$TPOT_TYPE" == MOBILE ]]; then
+  exec /usr/share/logstash/bin/logstash --path.settings /usr/share/logstash/config-mobile
+fi
 exec /usr/share/logstash/bin/logstash

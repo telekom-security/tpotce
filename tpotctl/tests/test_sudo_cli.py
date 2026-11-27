@@ -220,5 +220,5 @@ class CliTest(unittest.TestCase):
             for args in (("sudo",), ("sensors", "sudo", "status")):
                 code, text = self.run_cli(*args)
                 self.assertNotEqual(code, 0)
-                self.assertIn("Linux", text)
+                self.assertIn("needs a T-Pot host on Debian 13", text)
         self.assertFalse(self.calls)

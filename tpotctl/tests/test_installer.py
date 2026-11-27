@@ -39,6 +39,8 @@ INSTALL_SH = os.path.join(REPO_DIR, "install.sh")
 UI_SH = os.path.join(REPO_DIR, "installer", "lib", "ui.sh")
 with open(os.path.join(REPO_DIR, "tpotctl", "tests", "account_cases.json"), encoding="utf-8") as handle:
     ACCOUNTS = json.load(handle)
+with open(os.path.join(REPO_DIR, "tpotctl", "tests", "platform_cases.json"), encoding="utf-8") as handle:
+    PLATFORM_CASES = json.load(handle)
 
 
 def block(text):
@@ -57,7 +59,7 @@ class FreshInstallEnvTest(unittest.TestCase):
         start = max(i for i in range(end) if lines[i].startswith("# T-Pot Kibana Objects"))
         return lines[start:end + 1]
 
-    def test_install_sh_writes_only_the_web_user_and_the_update_switch_into_env(self):
+    def test_install_sh_writes_only_the_mobile_role_web_user_and_update_switch_into_env(self):
         with open(INSTALL_SH, encoding="utf-8") as handle:
             text = handle.read()
         setter = text[text.index("env_set() {"):text.index("\n}", text.index("env_set() {"))]
@@ -69,8 +71,9 @@ class FreshInstallEnvTest(unittest.TestCase):
                                   'sed -i "s|^$1=.*|$1=$2|" "${myTPOT_CONF_FILE}"',
                                   '[ -z "$(tail -c 1 "${myTPOT_CONF_FILE}")" ] || echo >> "${myTPOT_CONF_FILE}"',
                                   'echo "$1=$2" >> "${myTPOT_CONF_FILE}"'])
-        self.assertEqual(re.findall(r"^\s*env_set (\S+) (.*)$", text, re.M),
-                         [("TPOT_AUTO_UPDATES", "DISABLED"), ("WEB_USER", '"${myWEB_USER_ENC_B64}"')])
+        self.assertEqual(re.findall(r"^\s*env_set (\S+) (\S+)", text, re.M),
+                         [("TPOT_TYPE", "MOBILE"), ("TPOT_AUTO_UPDATES", "DISABLED"),
+                          ("WEB_USER", '"${myWEB_USER_ENC_B64}"')])
         self.assertIn('python3 "${HOME}/tpotce/tpotctl/git_hooks.py" install', text)
         self.assertIn('python3 "${HOME}/tpotce/tpotctl/generated.py" stamp-env', text)
         self.assertIn('python3 "${HOME}/tpotce/tpotctl/generated.py" stamp-compose', text)
@@ -141,28 +144,109 @@ class ScriptsInSyncTest(unittest.TestCase):
 
 OS_RELEASES = {
     "debian": ('NAME="Debian GNU/Linux"\nID=debian\nVERSION_ID="13"\n', "ok"),
-    "debian point release": ('NAME="Debian GNU/Linux"\nVERSION_ID="13.7"\n', "ok"),
+    "debian point release": ('NAME="Debian GNU/Linux"\nID=debian\nVERSION_ID="13.7"\n', "ok"),
     # 32-bit Raspberry Pi OS (armhf), the 64-bit one says Debian GNU/Linux (the next one)
     "raspbian": ('NAME="Raspbian GNU/Linux"\nID=raspbian\nVERSION_ID="13"\n', "fail"),
     "pi with debian identity": ('NAME="Debian GNU/Linux"\nID=debian\nVERSION_ID="13"\n'
                                'PRETTY_NAME="Debian GNU/Linux 13 (trixie)"\n', "ok"),
-    "old debian": ('NAME="Debian GNU/Linux"\nVERSION_ID="12"\n', "fail"),
+    "old debian": ('NAME="Debian GNU/Linux"\nID=debian\nVERSION_ID="12"\n', "fail"),
     "old raspbian": ('NAME="Raspbian GNU/Linux"\nVERSION_ID="12"\n', "fail"),
-    "missing version": ('NAME="Debian GNU/Linux"\n', "fail"),
-    "ubuntu": ('NAME="Ubuntu"\nVERSION_ID="26.04"\n', "warn"),
+    "missing version": ('NAME="Debian GNU/Linux"\nID=debian\n', "fail"),
+    "missing identity": ('NAME="Debian GNU/Linux"\nVERSION_ID="13"\n', "fail"),
+    "ubuntu": ('NAME="Ubuntu"\nID=ubuntu\nVERSION_ID="26.04"\n', "fail"),
     "old ubuntu": ('NAME="Ubuntu"\nVERSION_ID="24.04"\n', "fail"),
-    "fedora": ('NAME="Fedora Linux"\nVERSION_ID=44\n', "warn"),
-    "alma": ('NAME="AlmaLinux"\nVERSION_ID="10.1"\n', "warn"),
-    "rhel": ('NAME="Red Hat Enterprise Linux"\nVERSION_ID="10.1"\n', "warn"),
-    "rocky": ('NAME="Rocky Linux"\nVERSION_ID="10.1"\n', "warn"),
-    "tumbleweed": ('NAME="openSUSE Tumbleweed"\nVERSION_ID="20261001"\n', "warn"),
+    "fedora": ('NAME="Fedora Linux"\nID=fedora\nVERSION_ID=44\n', "fail"),
+    "alma": ('NAME="AlmaLinux"\nID=almalinux\nVERSION_ID="10.1"\n', "fail"),
+    "rhel": ('NAME="Red Hat Enterprise Linux"\nID=rhel\nVERSION_ID="10.1"\n', "fail"),
+    "rocky": ('NAME="Rocky Linux"\nID=rocky\nVERSION_ID="10.1"\n', "fail"),
+    "tumbleweed": ('NAME="openSUSE Tumbleweed"\nID=opensuse-tumbleweed\nVERSION_ID="20261001"\n', "fail"),
     "arch": ('NAME="Arch Linux"\n', "fail"),
     "no os-release": ("", "fail"),
 }
 
-SUPPORT_POLICY = ("Debian is the preferred T-Pot platform. "
-                  "Raspberry Pi OS remains supported for T-Pot Mobile.")
-BEST_EFFORT = "best effort only: no equal test coverage or guaranteed distribution-specific fixes"
+SUPPORT_POLICY = ("New installations require Debian GNU/Linux 13. "
+                  "Raspberry Pi OS is supported for the built-in T-Pot Mobile edition.")
+
+
+@unittest.skipUnless(yaml, "PyYAML is not installed")
+class PreBootstrapPlatformTest(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        with open(PLAYBOOK, encoding="utf-8") as handle:
+            cls.plays = yaml.safe_load(handle)
+        cls.tasks = cls.plays[0]["tasks"]
+        cls.gate = next((task for task in cls.tasks
+                         if task.get("name") == "Check supported install platform before Python bootstrap (All)"),
+                        None)
+
+    @staticmethod
+    def run_gate(raw, case, root, marker_state=None):
+        release_file = os.path.join(root, "os-release")
+        marker_file = os.path.join(root, "rpi-issue")
+        names = {"debian": "Debian GNU/Linux", "raspbian": "Raspbian GNU/Linux",
+                 "ubuntu": "Ubuntu", "fedora": "Fedora Linux"}
+        name = names.get(case["os_id"], "Debian GNU/Linux" if not case["os_id"] else case["os_id"])
+        lines = [f"NAME={json.dumps(name)}"]
+        if case["os_id"]:
+            lines.append(f"ID={case['os_id']}")
+        if case["os_major"] is not None:
+            lines.append(f"VERSION_ID={json.dumps(str(case['os_major']))}")
+        with open(release_file, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(lines) + "\n")
+        try:
+            os.unlink(marker_file)
+        except FileNotFoundError:
+            pass
+        if marker_state is None:
+            marker_state = "Raspberry Pi OS\n" if case["raspberry_pi_os"] else None
+        if marker_state is not None:
+            with open(marker_file, "w", encoding="utf-8") as handle:
+                handle.write(marker_state)
+        edition_letters = {"standard": "h", "sensor": "s", "llm": "l", "mini": "i",
+                           "mobile": "m", "tarpit": "t"}
+        raw = raw.replace("/etc/os-release", release_file).replace("/etc/rpi-issue", marker_file)
+        raw = raw.replace("{{ tpot_install_type | default('') }}",
+                          edition_letters.get(case["edition"], ""))
+        with tempfile.TemporaryDirectory(dir=root) as bin_dir:
+            for command, output in (("uname", case["machine"]), ("getconf", str(case["userland_bits"]))):
+                path = os.path.join(bin_dir, command)
+                with open(path, "w", encoding="utf-8") as handle:
+                    handle.write(f"#!/bin/sh\nprintf '%s\\n' {json.dumps(output)}\n")
+                os.chmod(path, 0o755)
+            env = dict(os.environ, PATH=bin_dir + os.pathsep + os.environ["PATH"])
+            return subprocess.run(["/bin/sh", "-c", raw], env=env, stdout=subprocess.PIPE,
+                                  stderr=subprocess.STDOUT, universal_newlines=True, timeout=30)
+
+    def test_platform_gate_is_first_and_runs_under_any_tag_filter(self):
+        self.assertIsNotNone(self.gate, "the first Ansible play must validate the host before bootstrapping Python")
+        self.assertIn("raw", self.gate)
+        self.assertIn("always", self.gate.get("tags", []))
+        names = [task.get("name") for task in self.tasks]
+        self.assertEqual(names[0], self.gate["name"])
+        self.assertLess(names.index(self.gate["name"]), names.index("Check if python3 is installed (All)"))
+        self.assertLess(names.index(self.gate["name"]), next(i for i, task in enumerate(self.tasks)
+                                                              if "apt" in task.get("raw", "")))
+
+    def test_platform_gate_matches_every_new_install_case(self):
+        self.assertIsNotNone(self.gate, "the first Ansible play must validate the host before bootstrapping Python")
+        with open(os.path.join(REPO_DIR, "tpotctl", "tests", "platform_cases.json"), encoding="utf-8") as handle:
+            cases = json.load(handle)
+        with tempfile.TemporaryDirectory() as root:
+            for case in cases:
+                if case["operation"] != "install":
+                    continue
+                with self.subTest(name=case["name"]):
+                    result = self.run_gate(self.gate["raw"], case, root)
+                    self.assertEqual(result.returncode == 0, case["expected"] == "allow", result.stdout)
+
+    def test_existing_but_empty_pi_marker_fails_closed(self):
+        self.assertIsNotNone(self.gate, "the first Ansible play must validate the host before bootstrapping Python")
+        case = {"os_id": "debian", "os_major": 13, "machine": "aarch64", "userland_bits": 64,
+                "raspberry_pi_os": False, "edition": "mobile"}
+        with tempfile.TemporaryDirectory() as root:
+            result = self.run_gate(self.gate["raw"], case, root, marker_state="")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
 
 
 @unittest.skipUnless(yaml, "PyYAML is not installed")
@@ -173,16 +257,12 @@ class SupportPolicyPlaybookTest(unittest.TestCase):
             plays = yaml.safe_load(handle)
         tasks = plays[1]["tasks"]
         names = [t["name"] for t in tasks]
-        policy = names.index("Show preferred host platforms (All)")
-        warning = names.index("Warn about best-effort distribution (All)")
+        policy = names.index("Show supported host platforms (All)")
         self.assertLess(names.index("Check if supported distribution version (All)"), policy)
-        self.assertLess(policy, warning)
-        self.assertLess(warning, names.index("Count default routes (All)"))
+        self.assertLess(policy, names.index("Count default routes (All)"))
         self.assertEqual(tasks[policy]["debug"]["msg"], SUPPORT_POLICY)
         self.assertNotIn("when", tasks[policy])
-        self.assertEqual(tasks[warning]["when"], 'ansible_facts.distribution != "Debian"')
-        self.assertEqual(tasks[warning]["debug"]["msg"],
-                         "WARNING: {{ ansible_facts.distribution }} is " + BEST_EFFORT + ".")
+        self.assertNotIn("Warn about best-effort distribution (All)", names)
         self.assertEqual(set(plays[1]["tags"]),
                          {"AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"})
 
@@ -537,14 +617,8 @@ class ChecksTest(unittest.TestCase):
                 self.addCleanup(os.unlink, path)
                 check = installer.check_distro(installer.os_release(path))
                 self.assertEqual(check.state, state)
-                if state == "warn":
-                    self.assertIn(BEST_EFFORT, check.detail)
-                    self.assertIn(SUPPORT_POLICY, check.detail)
-                elif state == "ok":
-                    self.assertIn(SUPPORT_POLICY, check.detail)
-                    self.assertNotIn("best effort", check.detail)
-                else:
-                    self.assertNotIn("best effort", check.detail)
+                self.assertNotIn("best effort", check.detail)
+
 
     def test_root(self):
         self.assertEqual(installer.check_root(0).state, "fail")
@@ -601,6 +675,38 @@ class ChecksTest(unittest.TestCase):
         self.assertEqual(installer.check_resources(hive, 15.6, 300).state, "ok")     # a 16 GB machine
         self.assertEqual(installer.check_resources(hive, 8, 300).state, "warn")
         self.assertEqual(installer.meminfo_gb("MemTotal:       16384000 kB\n"), 16384000 / 1024 / 1024)
+
+
+class InstallerPlatformMatrixTest(unittest.TestCase):
+
+    def test_new_install_cases_match_shared_platform_matrix(self):
+        names = {"debian": "Debian GNU/Linux", "ubuntu": "Ubuntu"}
+        for case in PLATFORM_CASES:
+            if case["operation"] != "install":
+                continue
+            with self.subTest(name=case["name"]):
+                os_id = case["os_id"]
+                release = {"ID": os_id, "NAME": names.get(os_id, os_id),
+                           "VERSION_ID": "" if case["os_major"] is None else str(case["os_major"])}
+                pi_os = case["raspberry_pi_os"]
+                checks = (installer.check_distro(release, raspberry_pi_os=pi_os),
+                          installer.check_arch(case["machine"], case["userland_bits"],
+                                               raspberry_pi_os=pi_os))
+                edition_keys = {edition.key for edition in installer.available_editions(pi_os)}
+                allowed = all(check.state != "fail" for check in checks) and case["edition"] in edition_keys
+                self.assertEqual(allowed, case["expected"] == "allow")
+
+    def test_raspberry_pi_os_marker_must_be_readable_and_nonempty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = os.path.join(tmp, "rpi-issue")
+            with open(marker, "w", encoding="utf-8") as handle:
+                handle.write("Raspberry Pi OS release\n")
+            self.assertTrue(installer.is_raspberry_pi_os(marker))
+            with open(marker, "w", encoding="utf-8"):
+                pass
+            self.assertFalse(installer.is_raspberry_pi_os(marker))
+            self.assertFalse(installer.is_raspberry_pi_os(os.path.join(tmp, "missing")))
+            self.assertIsNone(installer.is_raspberry_pi_os(tmp))
 
 
 class EngineTest(unittest.TestCase):
@@ -670,6 +776,13 @@ class EngineTest(unittest.TestCase):
         with installer.secret_files(web="pw") as files:
             command = installer.engine_command(custom, files, "/x/install.sh")
         self.assertEqual(command[command.index("-c") + 1], "/r/docker-compose-custom.yml")
+
+    def test_custom_mobile_uses_mobile_engine_role(self):
+        answers = installer.Answers(installer.EDITION_BY_LETTER["m"], custom_compose="custom.yml",
+                                    sudo_mode="secure")
+        command = installer.engine_command(answers, {})
+        self.assertEqual(command[command.index("-t") + 1], "m")
+        self.assertNotIn("-u", command)
 
     def test_progress(self):
         progress = installer.Progress()
@@ -1118,17 +1231,58 @@ class AssistantTest(AsyncTestCase):
         app.query_one("#ins-sudo-mode").value = "secure"
         await pilot.pause(0.2)
 
-    async def test_best_effort_warning_is_visible_and_does_not_block_installation(self):
-        check = installer.check_distro({"NAME": "Ubuntu", "VERSION_ID": "26.04"})
-        self.assertEqual(check.state, "warn")
+    async def test_unsupported_distribution_is_visible_and_blocks_installation(self):
+        check = installer.check_distro({"NAME": "Ubuntu", "ID": "ubuntu", "VERSION_ID": "26.04"})
+        self.assertEqual(check.state, "fail")
         app = self.make_app(checks=lambda: [check])
         async with app.run_test(size=(100, 36)) as pilot:
             await pilot.pause(0.4)
-            self.assertIn(BEST_EFFORT, str(app.query_one("#check-list").render()))
-            self.assertFalse(app.query_one("#ins-next").disabled)
-            await pilot.click("#ins-next")
+            self.assertIn("not accepted", str(app.query_one("#check-list").render()))
+            self.assertTrue(app.query_one("#ins-next").disabled)
+
+    async def test_pi_os_shows_only_mobile_and_hides_customizer(self):
+        from unittest import mock
+        with mock.patch.object(installer, "is_raspberry_pi_os", return_value=True):
+            app = self.make_app(sudo="passwordless")
+            async with app.run_test(size=(100, 36)) as pilot:
+                await pilot.pause(0.4)
+                await pilot.click("#ins-next")
+                await pilot.pause(0.2)
+                options = app.query_one("#edition-list")
+                self.assertEqual(options.option_count, 1)
+                self.assertEqual(options.get_option_at_index(0).id, "m")
+                await pilot.press("enter")
+                await pilot.pause()
+                self.assertEqual(app.step, "settings")
+                self.assertEqual(app.draft["TPOT_TYPE"], "MOBILE")
+                self.assertFalse(os.path.exists(os.path.join(self.repo, ".env")))
+
+    async def test_pi_os_rejects_programmatic_nonmobile_installation(self):
+        from unittest import mock
+        with mock.patch.object(installer, "is_raspberry_pi_os", return_value=True):
+            app = self.make_app(sudo="passwordless")
+            async with app.run_test(size=(100, 36)) as pilot:
+                await pilot.pause(0.4)
+                app.answers.edition = installer.EDITION_BY_LETTER["h"]
+                app.answers.sudo_mode = "convenient"
+                app.goto("review")
+                app.start_install()
+                await pilot.pause(0.2)
+                self.assertEqual(FakeEngine.runs, [])
+                self.assertEqual(app.step, "review")
+
+    async def test_failed_host_check_blocks_programmatic_installation(self):
+        check = installer.check_distro({"NAME": "Ubuntu", "ID": "ubuntu", "VERSION_ID": "26.04"})
+        app = self.make_app(sudo="passwordless", checks=lambda: [check])
+        async with app.run_test(size=(100, 36)) as pilot:
+            await pilot.pause(0.4)
+            app.answers.sudo_mode = "convenient"
+            app.goto("review")
+            self.assertIn("Distribution", app.problem_review())
+            app.start_install()
             await pilot.pause(0.2)
-            self.assertEqual(app.step, "edition")
+            self.assertEqual(FakeEngine.runs, [])
+            self.assertEqual(app.step, "review")
 
     async def test_selected_edition_has_a_console_safe_background(self):
         from unittest import mock

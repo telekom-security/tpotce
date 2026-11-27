@@ -28,7 +28,7 @@ cases:
     set: {WEB_USER: dXNlcjpwYXNzd29yZA==}
     errors: [WEB_USER]
     warnings: [LS_WEB_USER]
-  - name: hive without nginx needs no web user (mobile)
+  - name: hive without nginx needs no web user
     services: [tpotinit, ciscoasa, cowrie, dionaea, elasticsearch, logstash, ewsposter]
     set: {WEB_USER: ""}
     warnings: [LS_WEB_USER]
@@ -36,8 +36,17 @@ cases:
     set:
       WEB_USER: dHNlYzokYXByMSRYUnE2SC5rbiRVRjZQM1VVQmJVNWJUQmNmSGRuUFQxCgo= dHNlYzokYXByMSR6VUFHVWdmOCRROXI3a09CTjFjY3lCeU1DTloyanEvCgo=
       LS_WEB_USER: c2Vuc29yOiRhcHIxJGVpMHdzUmdYJHNyWHF4UG53ZzZqWUc3aEFaUWxrWDEKCg==
+  - name: mobile needs no credentials or hive-only settings
+    services: [elasticsearch, logstash, ewsposter, kibana]
+    set: {TPOT_TYPE: MOBILE, WEB_USER: "", TPOT_SENSOR_STATUS_RETENTION: invalid, TPOT_KIBANA_OBJECTS: invalid}
+  - name: mobile validates local event retention
+    services: [elasticsearch]
+    set: {TPOT_TYPE: MOBILE, TPOT_ES_RETENTION: "0"}
+    errors: [TPOT_ES_RETENTION]
+  - name: mobile ignores event retention without elasticsearch
+    set: {TPOT_TYPE: MOBILE, TPOT_ES_RETENTION: "0"}
   - name: unknown type checks neither hive nor sensor keys
-    set: {TPOT_TYPE: MOBILE, WEB_USER: ""}
+    set: {TPOT_TYPE: OTHER, WEB_USER: ""}
     errors: [TPOT_TYPE]
   - name: toggles only take their own values
     set: {TPOT_PERSISTENCE: "true", TPOT_BLACKHOLE: enabled, TPOT_ATTACKMAP_TEXT: "", TPOT_AUTO_UPDATES: disabled}

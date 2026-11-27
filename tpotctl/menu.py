@@ -5,7 +5,7 @@ GROUPS = (
     ("Configure", ("edition", "llm", "settings"), ("customize", "edition", "env", "llm", "sudo")),
     ("Access", ("sensors", "users"), ("sensors", "users")),
     ("Data & maintenance", ("elastic", "update"),
-     ("elastic", "install", "restart", "restore", "setup", "start", "stop", "uninstall", "update")),
+     ("elastic", "install", "migrate", "restart", "restore", "setup", "start", "stop", "uninstall", "update")),
 )
 
 PAGE_ORDER = tuple(page for _, pages, _ in GROUPS for page in pages)

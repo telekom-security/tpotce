@@ -7,7 +7,9 @@ gum, and the os-release of a Debian 13 (an awk that reads $HOME/os-release inste
 nothing touches the host, the real checkout, its .env or ~/.config/tpotce, nothing calls docker.
 """
 
+import base64
 import hashlib
+import importlib
 import json
 import os
 from pathlib import Path
@@ -15,12 +17,15 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
+import tempfile
 import time
 import unittest
+from unittest import mock
 
 from tpotctl.tests import test_scripts as base
 from tpotctl.tests import test_ui as ui
-from tpotctl.tests.test_installer import BEST_EFFORT, OS_RELEASES, SUPPORT_POLICY
+from tpotctl.tests.test_installer import OS_RELEASES, SUPPORT_POLICY
 
 from tpotctl import generated, installer
 
@@ -131,7 +136,7 @@ class Scripts(base.Harness):
         for name, text in STUBS.items():
             write(os.path.join(self.bin, name), text, 0o755)
         write(os.path.join(self.bin, "uname"), UNAME, 0o755)        # Linux, FAKE_UNAME_S says otherwise
-        write(os.path.join(self.home, "os-release"), 'NAME="Debian GNU/Linux"\nVERSION_ID="13"\n')
+        write(os.path.join(self.home, "os-release"), 'NAME="Debian GNU/Linux"\nID=debian\nVERSION_ID="13"\n')
         self.data = os.path.join(self.home, ".local", "share")
         write(os.path.join(self.data, "tpotce", "bin", "gum"), GUM, 0o755)
         self.tpotce = os.path.join(self.home, "tpotce")
@@ -188,8 +193,11 @@ class InstallShTest(Scripts):
                   f"# T-Pot: {edition.upper()}\nservices: {{}}\n")
         os.makedirs(os.path.join(self.tpotce, "tpotctl"), exist_ok=True)
         shutil.copy(os.path.join(REPO, "env.example"), os.path.join(self.tpotce, "env.example"))
-        for name in ("generated.py", "git_hooks.py", "runlog.py", "__init__.py", "bootstrap.py", "requirements.txt"):
+        for name in ("generated.py", "git_hooks.py", "runlog.py", "__init__.py", "bootstrap.py", "requirements.txt",
+                     "prefs.py", "say.py"):
             shutil.copy(os.path.join(REPO, "tpotctl", name), os.path.join(self.tpotce, "tpotctl", name))
+        for name in ("customizer.py", "customizer_core.py"):
+            shutil.copy(os.path.join(REPO, "compose", name), os.path.join(self.tpotce, "compose", name))
         write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\nWEB_USER=\n")
         # install.sh as it runs from a download: no clone around it
         self.script = os.path.join(self.home, "src", "install.sh")
@@ -202,8 +210,263 @@ class InstallShTest(Scripts):
         fingerprint = generated.configuration_fingerprint(text, self.tpotce, "env")
         return generated.stamp_text(text, fingerprint)
 
+    def migration_fixture(self):
+        migration = importlib.import_module("tpotctl.migration")
+        migration_import = importlib.import_module("tpotctl.migration_import")
+        os.unlink(os.path.join(self.tpotce, ".env"))
+        write(os.path.join(self.tpotce, "version"), "24.04.2\n")
+        os.makedirs(os.path.join(self.tpotce, ".git"), exist_ok=True)
+        os.makedirs(os.path.join(self.tpotce, "docker", "tpotinit", "dist", "etc"), exist_ok=True)
+        shutil.copy(os.path.join(REPO, "compose", "tpot_services.yml"),
+                    os.path.join(self.tpotce, "compose", "tpot_services.yml"))
+        shutil.copy(os.path.join(REPO, "docker", "tpotinit", "dist", "etc", "env.schema.yml"),
+                    os.path.join(self.tpotce, "docker", "tpotinit", "dist", "etc", "env.schema.yml"))
+        for name in ("migration.py", "migration_import.py", "envfile.py", "envschema.py", "ops.py",
+                     "installer.py", "runlog.py", "say.py", "prefs.py"):
+            shutil.copy(os.path.join(REPO, "tpotctl", name),
+                        os.path.join(self.tpotce, "tpotctl", name))
+        with open(os.path.join(self.tpotce, "tpotctl", "migration_import.py"), "a", encoding="utf-8") as handle:
+            handle.write(
+                "\nif os.environ.get('TPOT_TEST_MIGRATION_PLATFORM') == '1':\n"
+                "    installer.os_release = lambda: {'NAME': 'Debian GNU/Linux', 'ID': 'debian', "
+                "'VERSION_ID': '13'}\n"
+                "    installer.is_raspberry_pi_os = lambda: False\n"
+                "    installer.SERVICE_FILE = os.path.join(os.path.dirname(__file__), 'tpot.service')\n"
+                "    installer.installed = lambda: os.path.exists(installer.SERVICE_FILE)\n"
+            )
+        customizer = os.path.join(self.tpotce, "compose", "customizer.py")
+        write(customizer, """import sys
+output = sys.argv[sys.argv.index("-o") + 1]
+with open(output, "w", encoding="utf-8") as handle:
+    handle.write("# T-Pot: CUSTOM\\n# customizer: version=2 base=STANDARD\\n"
+                 "# customizer: add=\\n# customizer: remove=\\n# customizer: port=\\n"
+                 "services:\\n  tpotinit:\\n    image: target/tpotinit\\n  nginx: {}\\n")
+print("new: target-service")
+""")
+        source_dir = os.path.join(self.home, "migration-source")
+        os.makedirs(source_dir)
+        source_env = os.path.join(source_dir, "env")
+        web_user = base64.b64encode(b"admin:$2y$05$testhash\n").decode("ascii")
+        write(source_env, "TPOT_TYPE=HIVE\nTPOT_DATA_PATH=/source/tpot-data\nTPOT_VERSION=24.04.1\n"
+              f"TPOT_REPO=source-registry\nWEB_USER={web_user}\n", 0o600)
+        source_compose = os.path.join(source_dir, "compose.yml")
+        write(source_compose, "# T-Pot: STANDARD\nservices:\n  tpotinit:\n    image: old/tpotinit\n  nginx: {}\n", 0o600)
+        identity = os.path.join(source_dir, "uuid")
+        write(identity, "source-uuid\n", 0o600)
+        machine = __import__("platform").machine().lower()
+        architecture = "arm64" if machine in ("aarch64", "arm64") else "amd64"
+        package = os.path.join(self.home, "migration.tar")
+        migration.create_package(
+            package,
+            {
+                "release": "24.04.1",
+                "commit": "a" * 40,
+                "role": "HIVE",
+                "edition": "STANDARD",
+                "os_id": "debian",
+                "os_version": "12",
+                "architecture": architecture,
+                "userland_bits": 64,
+                "elasticsearch_version": "8.16.1",
+                "kibana_version": "8.16.1",
+                "image_digests": {"elasticsearch": "sha256:" + "b" * 64},
+                "data_path": "/source/tpot-data",
+            },
+            ["configuration", "identity"],
+            {"configuration/.env": source_env, "configuration/compose.yml": source_compose,
+             "identity/uuid": identity},
+        )
+        state = os.path.join(self.data, "tpotce", "migration")
+        with mock.patch.object(migration_import.installer, "os_release",
+                               return_value={"NAME": "Debian GNU/Linux", "ID": "debian", "VERSION_ID": "13"}), \
+                mock.patch.object(migration_import.installer, "is_raspberry_pi_os", return_value=False), \
+                mock.patch.object(migration_import.installer, "installed", return_value=False):
+            migration_import.stage_import(package, self.tpotce, state)
+        return state, web_user
+
+    def assert_migration_inputs_applied_before_playbook(self, install_service_on_failure=False):
+        playbook = os.path.join(self.bin, "ansible-playbook")
+        extra = '''if [ "${1##*/}" = tpot.yml ]; then
+  grep -q '^TPOT_DATA_PATH=./data$' "$HOME/tpotce/.env" || exit 8
+  grep -q '^TPOT_VERSION=24.04.2$' "$HOME/tpotce/.env" || exit 9
+  grep -q '^TPOT_REPO=ghcr.io/telekom-security$' "$HOME/tpotce/.env" || exit 10
+  grep -q '^WEB_USER=' "$HOME/tpotce/.env" || exit 11
+  grep -q 'target/tpotinit' "$HOME/tpotce/docker-compose.yml" || exit 12
+  [ "$(cat "$HOME/tpotce/data/uuid")" = source-uuid ] || exit 13
+fi
+'''
+        if install_service_on_failure:
+            extra += '''if [ "$FAKE_PLAYBOOK_RC" = 1 ] && [ "${1##*/}" = tpot.yml ]; then
+  touch "$HOME/tpotce/tpotctl/tpot.service"
+fi
+'''
+        write(playbook, STUBS["ansible-playbook"].replace("#!/bin/sh\n", "#!/bin/sh\n" + extra), 0o755)
+        return playbook
+
     def test_help(self):
         self.assert_help("install.sh", self.run_script(self.script, "-h"))
+
+    def test_migration_installs_imported_role_configuration_and_identity(self):
+        state, web_user = self.migration_fixture()
+        self.assert_migration_inputs_applied_before_playbook()
+
+        python_path = os.path.dirname(sys.executable)
+        result = self.install("--migration", "--migration-yes", "-s", TPOT_TEST_MIGRATION_PLATFORM="1",
+                              PATH=f"{self.bin}:{python_path}:{os.environ['PATH']}")
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("admin:$2y$", result.stdout + self.calls())
+        self.assertNotIn("htpasswd ", self.calls())
+        actual_web_user = next(
+            line.split("=", 1)[1] for line in base.read(os.path.join(self.tpotce, ".env")).splitlines()
+            if line.startswith("WEB_USER=")
+        )
+        self.assertEqual(actual_web_user, web_user)
+        self.assertFalse(os.path.exists(os.path.join(state, "pending.json")))
+        self.assertFalse(os.path.exists(os.path.join(state, "package.tar")))
+
+    def test_failed_migration_install_keeps_pending_package_for_retry(self):
+        state, _web_user = self.migration_fixture()
+        self.assert_migration_inputs_applied_before_playbook(install_service_on_failure=True)
+
+        python_path = os.path.dirname(sys.executable)
+        result = self.install("--migration", "--migration-yes", "-s", FAKE_PLAYBOOK_RC="1",
+                              TPOT_TEST_MIGRATION_PLATFORM="1",
+                              PATH=f"{self.bin}:{python_path}:{os.environ['PATH']}")
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("The playbook failed", result.stdout)
+        self.assertIn("ansible-playbook", self.calls())
+        self.assertTrue(os.path.isfile(os.path.join(state, "pending.json")))
+        self.assertTrue(os.path.isfile(os.path.join(state, "package.tar")))
+
+        python_path = os.path.dirname(sys.executable)
+        retry = self.install("--migration", "--migration-yes", "-s",
+                             TPOT_TEST_MIGRATION_PLATFORM="1",
+                             PATH=f"{self.bin}:{python_path}:{os.environ['PATH']}")
+        self.assertEqual(retry.returncode, 0, retry.stdout)
+        self.assertFalse(os.path.exists(os.path.join(state, "pending.json")))
+        self.assertFalse(os.path.exists(os.path.join(state, "package.tar")))
+
+    def migration_history_fixture(self):
+        state, web_user = self.migration_fixture()
+        with open(os.path.join(self.tpotce, "tpotctl", "migration_import.py"), "a", encoding="utf-8") as handle:
+            handle.write(
+                "\nif os.environ.get('TPOT_TEST_MIGRATION_HISTORY') == '1':\n"
+                "    _prepare_without_history = prepare_import\n"
+                "    def prepare_import(target_dir, state_dir, run=subprocess.run):\n"
+                "        report = _prepare_without_history(target_dir, state_dir, run)\n"
+                "        report['history'] = {'route': ['8.19.23', '9.5.4'], 'indices': 2, 'documents': 1234,\n"
+                "            'first': '2024-05-01T00:00:00Z', 'last': '2026-01-31T23:59:59Z', 'spaces': 1,\n"
+                "            'objects': 7, 'ignored_indices': 1, 'storage': {},\n"
+                "            'retention': {'events': '30', 'sensor_history': '30'}}\n"
+                "        return report\n"
+            )
+        write(os.path.join(self.tpotce, "tpotctl", "migration_history.py"), """import os
+from tpotctl.migration import MigrationError
+
+
+def _log(action, become_file):
+    with open(os.path.join(os.environ["HOME"], "calls"), "a", encoding="utf-8") as handle:
+        handle.write(f"migration_history {action} become={bool(become_file)}\\n")
+
+
+def hold_history(target_dir, state_dir, become_file=None):
+    _log("hold", become_file)
+    return True
+
+
+def restore_history(target_dir, state_dir, become_file=None):
+    _log("restore", become_file)
+    if os.environ.get("FAKE_HISTORY_RC") == "1":
+        raise MigrationError("history restore failed; the target start guard remains in place: differs")
+    return {"phase": "released"}
+""")
+        return state, web_user
+
+    def install_history(self, *args, **env):
+        python_path = os.path.dirname(sys.executable)
+        return self.install("--migration", "--migration-yes", "-s", *args, TPOT_TEST_MIGRATION_PLATFORM="1",
+                            TPOT_TEST_MIGRATION_HISTORY="1",
+                            PATH=f"{self.bin}:{python_path}:{os.environ['PATH']}", **env)
+
+    def test_migration_history_is_held_before_the_playbook_and_restored_after_the_pull(self):
+        state, _web_user = self.migration_history_fixture()
+        password = os.path.join(self.home, "sudo-pw")
+        write(password, "test password\n", 0o600)
+        result = self.install_history("-B", password)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        calls = self.calls().splitlines()
+        def first(text):
+            return next(index for index, line in enumerate(calls) if text in line)
+        self.assertLess(first("migration_history hold become=True"), first("tpot.yml"))
+        self.assertLess(first(" pull"), first("migration_history restore become=True"))
+        self.assertLess(first("migration_history restore"), first("tpot_sudo_prepare=false"))
+        for text in ("Elastic history: 2 indices, 1234 documents, 2024-05-01T00:00:00Z to 2026-01-31T23:59:59Z",
+                     "Elasticsearch upgrade route: 8.19.23 -> 9.5.4",
+                     "Kibana: 7 saved objects in 1 space(s)", "Indices not migrated: 1",
+                     "Target retention: events 30 days, sensor history 30 days",
+                     "Restored indices age from their creation on the source",
+                     "T-Pot keeps all of them until you apply the retention with tpot elastic retention --force",
+                     "The Elastic history was restored and verified"):
+            self.assertIn(text, result.stdout)
+        # es_retention.sh never creates a policy that deletes existing indices at the first start
+        self.assertNotIn("deletes restored data older than this retention once T-Pot runs", result.stdout)
+        self.assertFalse(os.path.exists(os.path.join(state, "pending.json")))
+
+    def test_migration_history_is_not_restored_without_all_images(self):
+        state, _web_user = self.migration_history_fixture()
+        result = self.install_history(FAKE_PULL_RC="1")
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("migration_history hold", self.calls())
+        self.assertNotIn("migration_history restore", self.calls())
+        self.assertNotIn("tpot_sudo_prepare=false", self.calls())
+        self.assertIn("could not all be pulled", result.stdout)
+        self.assertTrue(os.path.isfile(os.path.join(state, "pending.json")))
+
+    def test_a_failed_history_restore_keeps_the_target_held_and_staged(self):
+        state, _web_user = self.migration_history_fixture()
+        result = self.install_history(FAKE_HISTORY_RC="1")
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("The Elastic history could not be restored", result.stdout)
+        self.assertIn("start guard remains in place", result.stdout)
+        self.assertNotIn("tpot_sudo_prepare=false", self.calls())
+        self.assertTrue(os.path.isfile(os.path.join(state, "pending.json")))
+
+        retry = self.install_history()
+        self.assertEqual(retry.returncode, 0, retry.stdout)
+        self.assertEqual(self.calls().count("migration_history restore"), 2)
+        self.assertFalse(os.path.exists(os.path.join(state, "pending.json")))
+
+    def test_a_failed_sudo_mode_after_the_release_asks_for_the_retry_before_a_reboot(self):
+        # after a reboot T-Pot starts and fills its data folder, a retry could no longer finish the stage
+        state, _web_user = self.migration_history_fixture()
+        playbook = os.path.join(self.bin, "ansible-playbook")
+        write(playbook, STUBS["ansible-playbook"].replace("#!/bin/sh\n", """#!/bin/sh
+case " $* " in *tpot_sudo_prepare=false*) [ -z "$FAKE_SUDO_RC" ] || { echo "ansible-playbook $*" >> "$HOME/calls"; exit 1; } ;; esac
+"""), 0o755)
+        result = self.install_history(FAKE_SUDO_RC="1")
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("The requested sudo mode could not be applied", result.stdout)
+        self.assertIn("Run ./install.sh --migration again before you reboot", result.stdout)
+        self.assertTrue(os.path.isfile(os.path.join(state, "pending.json")))
+
+        retry = self.install_history()
+        self.assertEqual(retry.returncode, 0, retry.stdout)
+        self.assertFalse(os.path.exists(os.path.join(state, "pending.json")))
+
+    def test_migration_without_history_needs_no_history_step(self):
+        self.migration_fixture()
+        python_path = os.path.dirname(sys.executable)
+        result = self.install("--migration", "--migration-yes", "-s", TPOT_TEST_MIGRATION_PLATFORM="1",
+                              PATH=f"{self.bin}:{python_path}:{os.environ['PATH']}")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("migration_history", self.calls())
+        self.assertNotIn("Elastic history", result.stdout)
 
     def classic(self, answers, **env):
         return subprocess.run(["bash", self.script, "-n", "-t", "s"], input=answers,
@@ -573,22 +836,25 @@ PY
                         self.assertIn("ansible-playbook", self.calls())
                         self.assertLess(result.stdout.index(SUPPORT_POLICY),
                                         result.stdout.index("PLAY [T-Pot]"))
-                        if state == "warn":
-                            self.assertIn("### [WARNING]", result.stdout)
-                            self.assertIn(BEST_EFFORT, result.stdout)
-                        else:
-                            self.assertNotIn("best effort", result.stdout)
+                        self.assertNotIn("best effort", result.stdout)
 
-    def test_mobile_installs_on_raspberry_pi_os_64bit_and_not_on_32bit_raspbian(self):
-        """Raspberry Pi OS (64-bit) says Debian GNU/Linux, only the 32-bit one Raspbian GNU/Linux."""
+    def test_mobile_installs_on_debian_and_32bit_raspbian_is_refused(self):
+        if sys.platform == "darwin":
+            # The fixture emulates Debian, where sed -i takes no backup suffix.
+            write(os.path.join(self.bin, "sed"), '#!/bin/sh\nif [ "$1" = -i ]; then shift; '
+                  'exec /usr/bin/sed -i "" "$@"; fi\nexec /usr/bin/sed "$@"\n', 0o755)
         mobile_compose = "# T-Pot: MOBILE\nservices:\n  mobile: {}\n"
         write(os.path.join(self.tpotce, "compose", "mobile.yml"), mobile_compose)
         write(os.path.join(self.home, "os-release"), OS_RELEASES["pi with debian identity"][0])
         result = self.install("-s", "-t", "m")
         self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("Raspberry Pi OS remains supported for T-Pot Mobile", result.stdout)
         self.assertNotIn("best effort", result.stdout)
         self.assertIn("T-Pot mobile is installed (MOBILE)", result.stdout)
+        from tpotctl.envfile import EnvFile
+        self.assertEqual(EnvFile(os.path.join(self.tpotce, ".env")).values()["TPOT_TYPE"], "MOBILE")
+        ansible = next(line for line in self.calls().splitlines() if "ansible-playbook" in line
+                       and "/tpot.yml" in line)
+        self.assertIn("-e tpot_install_type=m", ansible)
         with open(os.path.join(self.tpotce, "docker-compose.yml"), encoding="utf-8") as handle:
             compose = handle.read()
         fingerprint = generated.configuration_fingerprint(mobile_compose, self.tpotce, "compose")
@@ -601,9 +867,93 @@ PY
         self.assertNotIn("Raspbian", result.stdout)
         self.assertNotIn("ansible-playbook", self.calls())
 
+    def test_custom_mobile_checks_before_writing_and_installs_without_web_user(self):
+        if sys.platform == "darwin":
+            write(os.path.join(self.bin, "sed"), '#!/bin/sh\nif [ "$1" = -i ]; then shift; '
+                  'exec /usr/bin/sed -i "" "$@"; fi\nexec /usr/bin/sed "$@"\n', 0o755)
+        compose = Path(self.tpotce, "docker-compose.yml")
+        env = Path(self.tpotce, ".env")
+        before = env.read_bytes()
+        custom = Path(self.home, "custom.yml")
+        valid = ("services:\n  tpotinit: {}\n  elasticsearch: {}\n  logstash:\n"
+                 "    environment: [TPOT_TYPE=MOBILE]\n")
+        custom.write_text(valid + "  nginx: {}\n")
+        args = ("-s", "-t", "m", "-c", str(custom))
+        rejected = self.install(*args)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn("nginx", rejected.stdout)
+        self.assertEqual(env.read_bytes(), before)
+        self.assertFalse(compose.exists())
+        custom.write_text(valid)
+        accepted = self.install(*args)
+        self.assertEqual(accepted.returncode, 0, accepted.stdout)
+        self.assertEqual(compose.read_text(), valid)
+        from tpotctl.envfile import EnvFile
+        values = EnvFile(str(env)).values()
+        self.assertEqual((values["TPOT_TYPE"], values["WEB_USER"]), ("MOBILE", ""))
+
+    def test_install_platform_function_matches_shared_install_matrix(self):
+        source = base.read("install.sh")
+        match = re.search(r"^fuCHECK_INSTALL_PLATFORM\(\) \{\n.*?^\}", source, re.M | re.S)
+        self.assertIsNotNone(match, "install.sh must expose its platform decision as fuCHECK_INSTALL_PLATFORM")
+        code = ("fuUI_ERROR() { printf 'ERROR: %s\\n' \"$*\" >&2; }\n"
+                "fuUI_INFO() { :; }\n" + match.group(0) + "\nfuCHECK_INSTALL_PLATFORM \"$@\"\n")
+        edition_letters = {"standard": "h", "sensor": "s", "llm": "l", "mini": "i",
+                           "mobile": "m", "tarpit": "t"}
+        cases = json.loads(base.read("tpotctl/tests/platform_cases.json"))
+        for case in cases:
+            if case["operation"] != "install":
+                continue
+            with self.subTest(name=case["name"]):
+                args = ["debian" if case["os_id"] == "debian" else case["os_id"],
+                        "Debian GNU/Linux" if case["os_id"] == "debian" else case["os_id"],
+                        "" if case["os_major"] is None else str(case["os_major"]),
+                        case["machine"], str(case["userland_bits"]),
+                        "1" if case["raspberry_pi_os"] else "0",
+                        edition_letters[case["edition"]], "0"]
+                result = subprocess.run(["bash", "-c", code, "test", *args], capture_output=True, text=True)
+                self.assertEqual(result.returncode == 0, case["expected"] == "allow", result.stderr)
+
+    def test_install_platform_function_refuses_nonmobile_and_custom_pi_editions(self):
+        source = base.read("install.sh")
+        match = re.search(r"^fuCHECK_INSTALL_PLATFORM\(\) \{\n.*?^\}", source, re.M | re.S)
+        self.assertIsNotNone(match, "install.sh must expose its platform decision as fuCHECK_INSTALL_PLATFORM")
+        code = ("fuUI_ERROR() { printf 'ERROR: %s\\n' \"$*\" >&2; }\n"
+                "fuUI_INFO() { :; }\n" + match.group(0) + "\nfuCHECK_INSTALL_PLATFORM \"$@\"\n")
+        for edition, custom, allowed in (("m", "0", True), ("h", "0", False), ("m", "1", False)):
+            with self.subTest(edition=edition, custom=custom):
+                args = ["debian", "Debian GNU/Linux", "13", "aarch64", "64", "1", edition, custom]
+                result = subprocess.run(["bash", "-c", code, "test", *args], capture_output=True, text=True)
+                self.assertEqual(result.returncode == 0, allowed, result.stderr)
+
+    def test_selected_edition_is_rechecked_before_install_questions(self):
+        source = base.read("install.sh")
+        selected = source.rfind("\nask_type\n")
+        gate = source.rfind("if ! fuCHECK_INSTALL_PLATFORM")
+        next_question = source.find("\nask_web_user\n", selected)
+        self.assertGreater(selected, 0)
+        self.assertGreater(gate, selected)
+        self.assertGreater(next_question, gate)
+
+    def test_install_script_raspberry_pi_marker_is_explicit(self):
+        source = base.read("install.sh")
+        match = re.search(r"^fuIS_RPI_OS\(\) \{\n.*?^\}", source, re.M | re.S)
+        self.assertIsNotNone(match, "install.sh must expose its Raspberry Pi OS marker check as fuIS_RPI_OS")
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = os.path.join(tmp, "rpi-issue")
+            with open(marker, "w", encoding="utf-8") as handle:
+                handle.write("Raspberry Pi OS release\n")
+            code = match.group(0) + '\nfuIS_RPI_OS "$1"\n'
+            self.assertEqual(subprocess.run(["bash", "-c", code, "test", marker]).returncode, 0)
+            with open(marker, "w", encoding="utf-8"):
+                pass
+            self.assertEqual(subprocess.run(["bash", "-c", code, "test", marker]).returncode, 2)
+            self.assertEqual(subprocess.run(["bash", "-c", code, "test", os.path.join(tmp, "missing")])
+                             .returncode, 1)
+
     def test_32bit_systems_stop_before_anything_happens(self):
         """The userland counts, not the kernel: a 32-bit Raspberry Pi OS boots an aarch64 kernel on a Pi 4/5
-        (getconf LONG_BIT says 32 there). getconf without an answer counts as 64-bit."""
+        (getconf LONG_BIT says 32 there). An unknown userland bitness is not treated as 64-bit."""
         write(os.path.join(self.bin, "uname"),
               '#!/bin/sh\ncase "$*" in\n  -m) echo "${FAKE_UNAME_M}"; exit 0 ;;\nesac\n'
               f'exec {os.path.join(self.bin, "uname.real")} "$@"\n', 0o755)
@@ -612,7 +962,7 @@ PY
               '#!/bin/sh\n[ -n "${FAKE_LONG_BIT}" ] || exit 1\necho "${FAKE_LONG_BIT}"\n', 0o755)
         for machine, bits, ok in (("aarch64", "32", False), ("armv7l", "32", False), ("i686", "32", False),
                                   ("x86_64", "32", False), ("riscv64", "64", False),
-                                  ("aarch64", "64", True), ("x86_64", "64", True), ("x86_64", "", True)):
+                                  ("aarch64", "64", True), ("x86_64", "64", True), ("x86_64", "", False)):
             for marks in ([], ["-M"]):
                 with self.subTest(machine=machine, bits=bits, marks=marks):
                     write(os.path.join(self.home, "calls"), "")
@@ -622,9 +972,10 @@ PY
                         self.assertNotIn("64-bit system", result.stdout)
                         continue
                     self.assertEqual(result.returncode, 1, result.stdout[-800:])
-                    self.assertIn(f"T-Pot needs a 64-bit system (x86-64 or arm64), this one is {machine} "
-                                  f"with a {bits}-bit userland.", result.stdout)
-                    self.assertIn("For T-Pot Mobile use Raspberry Pi OS Lite (64-bit).", result.stdout)
+                    expected = f"T-Pot needs a 64-bit system (x86-64 or arm64), this one is {machine}"
+                    if bits:
+                        expected += f" with a {bits}-bit userland"
+                    self.assertIn(expected + ".", result.stdout)
                     self.assertNotIn("Only the following distributions", result.stdout)
                     self.assertEqual(self.calls(), "")
                     if marks:
@@ -1212,8 +1563,7 @@ fi
 
 
 class DistributionTest(Scripts):
-    """install.sh and uninstall.sh know the distributions of installer.SUPPORTED, and name all of them
-    (from their list) when this one is not among them."""
+    """install.sh names only Debian; uninstall.sh keeps its legacy host matrix for safe deinstallation."""
 
     def setUp(self):
         super().setUp()
@@ -1241,12 +1591,11 @@ class DistributionTest(Scripts):
 
     @unittest.skipUnless(old_bash(), "no bash 3 here (macOS has one as /bin/bash)")
     def test_bash_3_names_every_distribution(self):
-        """RA1: with bash 3.2 the message ends "... Rocky Linux and Ubuntu.", nothing on stderr (no "bad
-        array subscript"); a -t in capitals works there too."""
-        names = self.names("install.sh")
-        listed = ", ".join(names[:-1]) + " and " + names[-1]
+        """RA1: bash 3.2 prints each script's supported-distribution list without a bad array subscript."""
         for script, args in (("install.sh", ["-s", "-t", "S"]), ("uninstall.sh", ["-y"])):
             with self.subTest(script=script):
+                names = self.names(script)
+                listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
                 path = os.path.join(self.tpotce, script)
                 write(path, base.read(script), 0o755)
                 result = subprocess.run([old_bash(), path] + args, capture_output=True, universal_newlines=True,
@@ -1271,14 +1620,13 @@ class DistributionTest(Scripts):
                          result.stderr)
 
     def test_the_lists_are_the_supported_ones(self):
-        for script in ("install.sh", "uninstall.sh"):
-            with self.subTest(script=script):
-                self.assertEqual(sorted(self.names(script)), sorted(installer.SUPPORTED))
+        self.assertEqual(sorted(self.names("install.sh")), sorted(installer.SUPPORTED))
+        self.assertIn("Ubuntu", self.names("uninstall.sh"))
 
     def test_an_unsupported_distribution_names_all_of_them(self):
         for script in ("install.sh", "uninstall.sh"):
             names = self.names(script)
-            listed = ", ".join(names[:-1]) + " and " + names[-1]
+            listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
             with self.subTest(script=script):
                 path = os.path.join(self.tpotce, script)
                 write(path, base.read(script), 0o755)
@@ -1286,7 +1634,7 @@ class DistributionTest(Scripts):
                     else self.run_merged(path, "-y")
                 self.assertEqual(result.returncode, 1, result.stdout)
                 self.assertIn(f"Only the following distributions are supported: {listed}.", result.stdout)
-                for name in installer.SUPPORTED:
+                for name in names:
                     self.assertIn(name, result.stdout)
                 self.assertNotIn("ansible-playbook", self.calls())
 

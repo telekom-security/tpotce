@@ -151,6 +151,14 @@ class PagesTest(AsyncTestCase):
             with self.subTest(page=key):
                 self.assertIn(button, await self.check_page(key, backend=Backend()))
 
+    async def test_the_migration_buttons_of_the_update_page_are_reached(self):
+        """The export is always there, the resume of a held source only on that source."""
+        backend = FakeBackend()
+        backend.hold_value = "source"
+        reached = await self.check_page("update", backend=backend)
+        self.assertIn("run-export", reached)
+        self.assertIn("run-resume", reached)
+
     async def test_left_at_the_start_of_a_line_goes_to_the_menu(self):
         app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
         async with app.run_test(size=(150, 50)) as pilot:
@@ -458,6 +466,8 @@ class ScreensTest(AsyncTestCase):
             "user": lambda: dialogs.UserDialog("Add a web user"),
             "sensor": lambda: dialogs.SensorDialog(),
             "sensor-edit": lambda: dialogs.SensorEditDialog(sensors.Sensor("s1", host="192.0.2.9", ssh_user="t")),
+            "hive-address": lambda: dialogs.HiveAddressDialog(["192.0.2.1"], lambda: "198.51.100.7",
+                                                              sensors.check_hive_address),
             "fleet-update-request": lambda: fleet.FleetUpdateDialog(),
             "fleet-password": lambda: fleet.FleetPasswordDialog(),
             "fleet-update": fleet_update,

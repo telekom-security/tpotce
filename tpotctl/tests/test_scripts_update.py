@@ -55,6 +55,15 @@ class Scripts(base.Harness):
         self.stub("uname", UNAME)
         self.tpotce = os.path.join(self.home, "tpotce")
         os.makedirs(self.tpotce)
+        self.os_release = Path(self.home) / "os-release"
+        self.os_release.write_text('ID=debian\nVERSION_ID="13"\n', encoding="utf-8")
+        real_grep = shutil.which("grep") or "/usr/bin/grep"
+        self.stub("grep", f'''#!/bin/bash
+if [ "$#" -eq 3 ] && [ "$1" = "-E" ] && [ "$2" = '^(ID|VERSION_ID)=' ] && [ "$3" = "/etc/os-release" ]; then
+    exec {shlex.quote(real_grep)} "$1" "$2" "$HOME/os-release"
+fi
+exec {shlex.quote(real_grep)} "$@"
+''')
 
     def stub(self, name, text):
         path = os.path.join(self.bin, name)
@@ -131,6 +140,84 @@ class Scripts(base.Harness):
 
 
 class GeneratedRuntimeTest(Scripts):
+
+    def test_missing_mobile_compose_in_config_archive_never_leaves_standard(self):
+        root = Path(self.tpotce)
+        (root / "compose").mkdir()
+        mobile = "# T-Pot: MOBILE\nservices: {}\n"
+        (root / "compose/mobile.yml").write_text(mobile)
+        (root / "docker-compose.yml").write_text("# T-Pot: STANDARD\nservices: {}\n")
+        archive = base.make_backup(self.home, {"env": "TPOT_TYPE=MOBILE\n", "MANIFEST": base.MANIFEST})
+        result = self.source_update(f'source "{RESTORE_SH}"\nmyDO_CONFIG=1 myARCHIVE="{archive}"\n'
+                                    'fuTMPDIR; fuTOC; fuDO_CONFIG', TMPDIR=self.home)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((root / "docker-compose.yml").read_text(), mobile)
+
+    def test_legacy_mobile_rollback_restores_exact_source_pair_twice(self):
+        root = Path(self.tpotce)
+        (root / "compose").mkdir()
+        source = "# T-Pot: MOBILE\nservices:\n  logstash:\n    image: example/logstash:old\n"
+        env = "TPOT_TYPE=HIVE\nTPOT_VERSION=old\nWEB_USER=fixture\nLS_WEB_USER=fixture2\n"
+        (root / "compose/mobile.yml").write_text(source)
+        (root / "docker-compose.yml").write_text(source)
+        (root / ".env").write_text(env)
+        for name in ("uuid", "elk/data/history", "cowrie/log/events", "kibana_objects/exports/export"):
+            path = root / "data" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(name)
+        self.stub("git", '#!/bin/sh\ncase "$*" in *rev-parse*) echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;; esac\n')
+        self.stub("docker", '#!/bin/sh\ncase "$*" in "image ls "*) echo "example/logstash:old sha256:fixture";; esac\n')
+        result = self.source_update("fuCHECK_EDITION\nfuBACKUP\nfuRESTORE_EDITION", TMPDIR=self.home)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        archive, = (Path(self.home) / "tpot_backups").glob("*.tar")
+        with tarfile.open(archive) as backup:
+            self.assertEqual(backup.extractfile("env").read().decode(), env)
+            self.assertIn(b"example/logstash:old sha256:fixture", backup.extractfile("images.txt").read())
+            for name in ("uuid", "elk/data/history", "cowrie/log/events", "kibana_objects/exports/export"):
+                self.assertEqual(backup.extractfile("data/" + name).read().decode(), name)
+        (root / "docker-compose.yml").write_text("# release compose\n")
+        for _ in range(2):
+            result = self.source_update(f'source "{RESTORE_SH}"\nmyDO_CONFIG=1 myARCHIVE="{archive}"\n'
+                                        'fuTMPDIR; fuTOC; fuDO_CONFIG', TMPDIR=self.home)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((root / ".env").read_text(), env)
+            self.assertEqual((root / ".env").stat().st_mode & 0o777, 0o600)
+            self.assertEqual((root / "docker-compose.yml").read_text(), source)
+
+    def test_mobile_update_requires_matching_evidence_and_preserves_the_backup(self):
+        import hashlib
+        root = Path(self.tpotce)
+        (root / "compose").mkdir()
+        mobile = "# T-Pot: MOBILE\nservices: {}\n"
+        (root / "compose/mobile.yml").write_text(mobile)
+        standard = "# T-Pot: STANDARD\nservices: {}\n"
+        (root / "compose/standard.yml").write_text(standard)
+        body = "services:\n  tpotinit: {}\n  logstash:\n    environment:\n      TPOT_TYPE: MOBILE\n  elasticsearch: {}\n"
+        custom = ("# T-Pot: CUSTOM\n# customizer: version=2 base=MOBILE\n# customizer: sha256="
+                  + hashlib.sha256(body.encode()).hexdigest() + "\n" + body)
+        for source, role, want, backup in (
+                (mobile, "HIVE", "MOBILE", False), (None, "MOBILE", "MOBILE", False),
+                (standard, "HIVE", "HIVE", False), (mobile, "HIVE", "HIVE", True),
+                (mobile + "# edited\n", "HIVE", None, False), (mobile, "SENSOR", None, False),
+                (custom, "SENSOR", None, False), (custom + "# edited\n", "HIVE", None, False),
+                (standard, "MOBILE", None, False)):
+            with self.subTest(role=role, source=source, backup=backup):
+                env = root / ".env"
+                original = f"TPOT_TYPE={role}\nTPOT_VERSION=old\nWEB_USER=fixture\n"
+                env.write_text(original)
+                compose = root / "docker-compose.yml"
+                if source is None:
+                    compose.unlink(missing_ok=True)
+                else:
+                    compose.write_text(source)
+                result = self.source_update(("myBACKUP_ONLY=1\n" if backup else "") +
+                                            "fuCHECK_EDITION\n" + ("" if backup else "fuRESTORE_EDITION\n"))
+                self.assertEqual(result.returncode == 0, want is not None, result.stdout + result.stderr)
+                self.assertEqual(env.read_text(), original.replace(f"TYPE={role}", f"TYPE={want or role}"))
+                if want is None or backup:
+                    self.assertEqual(compose.read_text(), source)
+                elif want == "MOBILE":
+                    self.assertEqual(compose.read_text(), mobile)
 
     def test_downgrade_does_not_require_helpers_from_the_newer_release(self):
         for filename, text in ((".env", "TPOT_VERSION=old\n"),
@@ -308,7 +395,7 @@ class LinuxOnlyTest(Scripts):
                     self.assertNotIn("T-Pot Restorer", result.stdout)
                     self.assertEqual(self.calls(), "")
                     if script == UPDATE_SH:
-                        self.assertIn("T-Pot runs on Linux only (Debian recommended).", result.stderr)
+                        self.assertIn("T-Pot runs on Debian 13 (Raspberry Pi OS for T-Pot Mobile) only.", result.stderr)
 
     def test_help_and_usage_errors_work_everywhere(self):
         for script in (UPDATE_SH, RESTORE_SH):
@@ -330,7 +417,7 @@ class LinuxOnlyTest(Scripts):
                            '  *) echo "MINGW64_NT-10.0-19045 Darwin 5.15.153.1-microsoft-standard-WSL2" ;;\nesac\n')
         for script, args, text in ((UPDATE_SH, ("-y",), "T-Pot no longer runs on WSL2, an update would not start there."),
                                    (UPDATE_SH, (), "T-Pot no longer runs on WSL2, an update would not start there."),
-                                   (RESTORE_SH, ("-y",), "T-Pot does not run on WSL2, restore the backup on a Linux host")):
+                                   (RESTORE_SH, ("-y",), "T-Pot does not run on WSL2, restore the backup on a Debian 13")):
             with self.subTest(script=os.path.basename(script), args=args):
                 result = self.run_plain(script, *args, cwd=self.tpotce)
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
@@ -415,6 +502,550 @@ class VersionTest(Scripts):
 
     def test_no_version_written_into_update_sh(self):
         self.assertFalse(re.search(r'myMASTERVERSION="[0-9]', base.read("update.sh")))
+
+
+class UpdatePlatformTest(Scripts):
+
+    def test_platform_case_matrix_decides_update_support(self):
+        cases_path = Path(REPO) / "tpotctl" / "tests" / "platform_cases.json"
+        cases = json.loads(cases_path.read_text(encoding="utf-8"))
+        for case in (case for case in cases if case["operation"] == "update"):
+            with self.subTest(case=case["name"]):
+                args = [
+                    case["operation"],
+                    case["os_id"],
+                    "" if case["os_major"] is None else str(case["os_major"]),
+                    case["machine"],
+                    str(case["userland_bits"]),
+                    "1" if case["raspberry_pi_os"] else "0",
+                    case["edition"],
+                    case["installed_release"],
+                ]
+                result = self.source_update(f"fuCHECK_PLATFORM {shlex.join(args)}")
+                self.assertEqual(result.returncode, 0 if case["expected"] == "allow" else 1,
+                                 result.stdout + result.stderr)
+                if case["expected"] == "deny":
+                    self.assertIn("### [ERROR]", result.stdout + result.stderr)
+
+    def test_unsupported_host_is_refused_before_update_side_effects(self):
+        self.os_release.write_text('ID=ubuntu\nVERSION_ID="24.04"\n', encoding="utf-8")
+        result = self.run_plain(UPDATE_SH, "-y")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("### [ERROR]", result.stdout + result.stderr)
+        calls = self.calls()
+        self.assertNotIn("systemctl stop", calls)
+        self.assertNotIn("docker ", calls)
+        self.assertNotIn("git ", calls)
+        self.assertNotIn("tar ", calls)
+
+    def test_data_loss_preflight_refuses_unsupported_host(self):
+        self.os_release.write_text('ID=ubuntu\nVERSION_ID="24.04"\n', encoding="utf-8")
+        result = self.run_plain(UPDATE_SH, "--check-data-loss")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("### [ERROR]", result.stdout + result.stderr)
+        self.assertNotIn("No loss of data found", result.stdout)
+        self.assertEqual(self.calls(), "")
+
+    def test_backup_only_remains_available_on_unsupported_host(self):
+        self.os_release.write_text('ID=ubuntu\nVERSION_ID="24.04"\n', encoding="utf-8")
+        result = self.run_plain(UPDATE_SH, "-y", "--backup-only")
+        self.assertNotIn("Regular T-Pot updates are supported only on Debian", result.stdout + result.stderr)
+        self.assertIn("Checking the space for the backup", result.stdout)
+
+
+
+class MigrationHoldTest(Scripts):
+    """The start guard of tpot migrate (90-tpot-migration.conf): no update, no start past it."""
+
+    def setUp(self):
+        super().setUp()
+        self.guard = os.path.join(self.home, "90-tpot-migration.conf")
+        with open(self.guard, "w", encoding="utf-8") as out:
+            out.write("# T-Pot migration 0123456789abcdef, owner UID 1000\n")
+
+    HELD = "### [NEXT] - A migration holds T-Pot stopped"
+
+    def assert_names_the_ways_out(self, output):
+        self.assertIn("tpot migrate resume-source --source ~/tpotce", output)
+        self.assertIn("in the checkout you exported with", output)
+        self.assertIn("./install.sh --migration", output)
+
+    def assert_summary_says_held(self, output):
+        """A start that does nothing past the guard (systemctl ends with 0) is no way back."""
+        summary = output[output.rindex("\n### T-Pot is updated") if "\n### T-Pot is updated" in output
+                         else output.rindex("\n### The "):]
+        self.assertIn(self.HELD, summary)
+        self.assertNotIn("T-Pot was left running.", summary)
+        self.assertNotIn("'sudo systemctl start tpot' brings it back", summary)
+
+    def backup_only(self, start="", **stubs):
+        text = base.read("update.sh")
+        block = text[text.index("# --backup-only: the backup of an update"):
+                     text.index("\nfuMARK phase check Checking the version and the source")]
+        names = ("fuOLD_UPDATER_CONFIG", "fuCHECK_EDITION", "fuCHECK_BACKUP_SPACE", "fuEXPORT_ELASTIC",
+                 "fuSTOP_TPOT", "fuBACKUP")
+        code = "".join(f"{name} () {{ {stubs.get(name, ':')}; }}\n" for name in names)
+        return self.source_update(code + f"myRUNNING=1 myBACKUP_ONLY=1 mySTART={start}\n" + block,
+                                  TPOT_MIGRATION_GUARD=self.guard)
+
+    def test_the_update_is_refused_before_side_effects(self):
+        result = self.run_plain(UPDATE_SH, "-y", TPOT_MIGRATION_GUARD=self.guard)
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, output)
+        self.assertIn("### [ERROR]", output)
+        self.assert_names_the_ways_out(output)
+        self.assert_summary_says_held(result.stdout)
+        calls = self.calls()
+        self.assertNotIn("systemctl", calls)
+        self.assertNotIn("docker ", calls)
+        self.assertNotIn("tar ", calls)
+
+    def test_a_refusal_after_the_old_updater_offers_no_start(self):
+        result = self.source_update("myRUNNING=1 myPREPARED=1 mySTOPPED=1\n"
+                                    "fuCHECK_MIGRATION_HOLD || exit 1", TPOT_MIGRATION_GUARD=self.guard)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assert_summary_says_held(result.stdout)
+
+    def test_the_data_loss_check_is_refused(self):
+        result = self.run_plain(UPDATE_SH, "--check-data-loss", TPOT_MIGRATION_GUARD=self.guard)
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, output)
+        self.assert_names_the_ways_out(output)
+        self.assertNotIn("No loss of data found", result.stdout)
+        self.assertEqual(self.calls(), "")
+
+    def test_the_backup_stays_available(self):
+        result = self.backup_only(fuSTOP_TPOT='echo "stopped" >> "$HOME/calls"',
+                                  fuBACKUP='echo "backup" >> "$HOME/calls"')
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, output)
+        self.assertNotIn("[ERROR]", output)
+        self.assertEqual(self.calls().splitlines()[-2:], ["stopped", "backup"])
+        self.assert_names_the_ways_out(output)
+        self.assertIn("A migration holds T-Pot stopped, the backup is written.", output)
+        self.assertNotIn("'sudo systemctl start tpot' brings it back", output)
+
+    def test_no_room_for_the_backup_does_not_say_t_pot_runs(self):
+        """A backup under the guard that finds no room: T-Pot is held, not left running."""
+        for full in ("", "1"):
+            with self.subTest(full=full):
+                result = self.backup_only(fuCHECK_BACKUP_SPACE=f"myFULL={full}; fuNO_ROOM")
+                output = result.stdout + result.stderr
+                self.assertEqual(result.returncode, 1, output)
+                self.assertIn("Not enough room", output)
+                self.assertNotIn("left running", output)
+                self.assertIn("A migration holds T-Pot stopped.", output)
+                self.assert_summary_says_held(result.stdout)
+
+    def test_backup_only_with_start_says_the_guard_holds_t_pot(self):
+        result = self.backup_only(start="1")
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIn("A migration holds T-Pot stopped, the backup is written.", output)
+        self.assertNotIn("T-Pot did not start again", output)
+        self.assertNotIn("systemctl start", self.calls())
+
+    def test_a_failed_backup_past_the_guard_offers_no_start(self):
+        result = self.backup_only(fuSTOP_TPOT="mySTOPPED=1", fuBACKUP='fuDID fail "The backup failed."; exit 1')
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assert_summary_says_held(result.stdout)
+
+    def test_a_restart_after_a_refusal_names_the_guard(self):
+        result = self.source_update('myRUNNING=1 mySTOPPED=1 mySTART=1\n'
+                                    'fuRESTART_AFTER_REFUSAL; echo "rc=$?"; exit 1',
+                                    TPOT_MIGRATION_GUARD=self.guard)
+        self.assertIn("rc=1", result.stdout, result.stdout + result.stderr)
+        self.assertNotIn("please start it yourself", result.stdout)
+        self.assert_summary_says_held(result.stdout)
+
+    def test_the_final_start_names_the_guard_not_the_pull(self):
+        text = base.read("update.sh")
+        block = text[text.index('if [ -n "${mySTART}" ];\n  then\n    # A failed pull alone'):
+                     text.index("# E2: on a SENSOR")]
+        result = self.source_update("myRUNNING=1 mySTART=1 myPULLOK=1\n" + block,
+                                    TPOT_MIGRATION_GUARD=self.guard)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("### [FAILED] - The update is through, but a migration holds T-Pot stopped.",
+                      result.stdout)
+        self.assertNotIn("image pull", result.stdout)
+        self.assertNotIn("not running", result.stdout)
+        self.assert_summary_says_held(result.stdout)
+
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root can search every folder")
+    def test_a_guard_in_a_folder_only_root_can_search_still_counts(self):
+        hidden = os.path.join(self.home, "tpot.service.d")
+        os.mkdir(hidden)
+        guard = os.path.join(hidden, "90-tpot-migration.conf")
+        shutil.copy(self.guard, guard)
+        os.chmod(hidden, 0o600)
+        self.addCleanup(os.chmod, hidden, 0o700)
+        self.stub("sudo", '#!/bin/sh\necho "sudo $*" >> "$HOME/calls"\n'
+                          f'[ "$1 $2 $3" = "test -e {guard}" ] && exit 0\nexit 1\n')
+        result = self.source_update('fuMIGRATION_HELD; echo "rc=$?"', TPOT_MIGRATION_GUARD=guard)
+        self.assertIn("rc=0", result.stdout, result.stdout + result.stderr)
+        self.assertIn(f"sudo test -e {guard}", self.calls())
+
+    def test_t_pot_is_not_started_past_the_guard(self):
+        result = self.source_update('fuSTART_TPOT; echo "rc=$?"', TPOT_MIGRATION_GUARD=self.guard)
+        self.assertIn("rc=2", result.stdout, result.stdout + result.stderr)
+        self.assertNotIn("T-Pot is started.", result.stdout)
+        self.assert_names_the_ways_out(result.stdout + result.stderr)
+        calls = self.calls()
+        self.assertNotIn("systemctl start", calls)
+        self.assertNotIn("docker compose", calls)
+
+    def test_without_the_guard_t_pot_starts(self):
+        result = self.source_update('fuSTART_TPOT; echo "rc=$?"',
+                                    TPOT_MIGRATION_GUARD=os.path.join(self.home, "missing.conf"))
+        self.assertIn("rc=0", result.stdout, result.stdout + result.stderr)
+        self.assertIn("systemctl start tpot.service", self.calls())
+
+
+class RefusalRollbackTest(Scripts):
+    """An earlier updater stopped T-Pot and put the checkout on the new release before this one refused
+    the host or a migration hold: the checkout goes back to the release before, where that is safe."""
+
+    OLD_ENV = "TPOT_TYPE=HIVE\nTPOT_VERSION=24.04.1\n"
+    OLD_COMPOSE = "# T-Pot: STANDARD\nservices: {}\n"
+    MINE_ENV = "TPOT_TYPE=HIVE\nTPOT_VERSION=24.04.1\nWEB_USER=mine\n"
+    MINE_COMPOSE = "# T-Pot: STANDARD\nservices: {mine: {}}\n"
+    NOT_RESTARTED = "this refused run has not restarted it"
+
+    def setUp(self):
+        super().setUp()
+        self.os_release.write_text('ID=ubuntu\nVERSION_ID="24.04"\n', encoding="utf-8")
+        self.guard = os.path.join(self.home, "missing-guard.conf")
+        self.systemctl("enabled")
+        Path(self.home, "tpot_inactive").touch()
+        origin = os.path.join(self.home, "origin")
+        os.makedirs(origin)
+        self.git("init", "-q", "-b", "master", cwd=origin)
+        for name, text in (("version", "24.04.1\n"), (".env", self.OLD_ENV),
+                           ("docker-compose.yml", self.OLD_COMPOSE)):
+            Path(origin, name).write_text(text, encoding="utf-8")
+        self.git("add", "-A", cwd=origin)
+        self.git("commit", "-q", "-m", "before", cwd=origin)
+        self.before = self.git("rev-parse", "HEAD", cwd=origin)
+        # 24.04.2 no longer tracks the configuration
+        Path(origin, "version").write_text("24.04.2\n", encoding="utf-8")
+        self.git("rm", "-q", "--cached", ".env", "docker-compose.yml", cwd=origin)
+        self.git("add", "version", cwd=origin)
+        self.git("commit", "-q", "-m", "release", cwd=origin)
+        self.release = self.git("rev-parse", "HEAD", cwd=origin)
+        shutil.rmtree(self.tpotce)
+        self.git("clone", "-q", origin, self.tpotce, cwd=self.home)
+        self.restore_sh(0)
+        self.mine()
+
+    def git(self, *args, cwd=None):
+        env = dict(os.environ, HOME=self.home, GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+        result = subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t"] + list(args),
+                                cwd=cwd or self.tpotce, env=env, capture_output=True,
+                                universal_newlines=True, check=True)
+        return result.stdout.strip()
+
+    def systemctl(self, enabled):
+        self.stub("systemctl", '#!/bin/sh\necho "systemctl $*" >> "$HOME/calls"\ncase "$1" in\n'
+                               f'  is-enabled) echo {enabled} ;;\n'
+                               '  is-active) if [ -f "$HOME/tpot_inactive" ]; then echo inactive; '
+                               'else echo active; fi ;;\n'
+                               '  start) rm -f "$HOME/tpot_inactive" ;;\n'
+                               '  stop) : > "$HOME/tpot_inactive" ;;\nesac\nexit 0\n')
+
+    def restore_sh(self, rc):
+        path = os.path.join(self.tpotce, "restore.sh")
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(f'#!/bin/sh\necho "restore.sh $*" >> "$HOME/calls"\nexit {rc}\n')
+        os.chmod(path, 0o755)
+
+    def mine(self):
+        """Your configuration, as the earlier updater (or fuOLD_UPDATER_CONFIG) left it in ~/tpotce."""
+        env = Path(self.tpotce, ".env")
+        env.write_text(self.MINE_ENV, encoding="utf-8")
+        env.chmod(0o600)
+        compose = Path(self.tpotce, "docker-compose.yml")
+        compose.write_text(self.MINE_COMPOSE, encoding="utf-8")
+        compose.chmod(0o640)
+
+    def archive(self, commit=None):
+        """The .tar of an update.sh with rollback.txt (a handover, or the branch master without one)."""
+        return base.make_backup(self.home, {
+            "MANIFEST": base.MANIFEST.replace("24.04.2", "24.04.1"),
+            "rollback.txt": (commit or self.before) + "\n",
+            "env": self.MINE_ENV, "docker-compose.yml": self.MINE_COMPOSE})
+
+    def tgz(self, version="24.04.1", age=3600):
+        """The backup of the update.sh of the tag 24.04.1: tar cvf ~/<date>_tpot_backup.tgz * .env"""
+        stage = os.path.join(self.home, "tgz-stage")
+        os.makedirs(stage, exist_ok=True)
+        Path(stage, ".env").write_text(self.MINE_ENV.replace("24.04.1", version), encoding="utf-8")
+        Path(stage, "docker-compose.yml").write_text(self.MINE_COMPOSE, encoding="utf-8")
+        path = os.path.join(self.home, "20261005_tpot_backup.tgz")
+        with tarfile.open(path, "w") as archive:
+            for name in ("docker-compose.yml", ".env"):
+                archive.add(os.path.join(stage, name), arcname=name)
+        shutil.rmtree(stage)
+        when = time.time() - age
+        os.utime(path, (when, when))
+        return path
+
+    def old_updater(self):
+        """What the update.sh of the tag 24.04.1 did after its backup: reset --hard, then pull --force."""
+        self.git("reset", "-q", "--hard", self.before)
+        self.git("reset", "-q", "--hard")
+        self.git("-c", "pull.rebase=false", "pull", "-q", "--force")
+        self.assertEqual(self.git("rev-parse", "HEAD"), self.release)
+        self.mine()
+
+    def refuse(self, why, setup, guard=None, **extra):
+        check = "fuCHECK_HOST_PLATFORM update" if why == "platform" else "fuCHECK_MIGRATION_HOLD"
+        return self.source_update(f"myRUNNING=1 {setup}\n{check} || fuPLATFORM_REFUSED {why}\n"
+                                  "echo NOT-REACHED", TPOT_MIGRATION_GUARD=guard or self.guard, **extra)
+
+    def hold_guard(self):
+        guard = os.path.join(self.home, "90-tpot-migration.conf")
+        Path(guard).write_text("# T-Pot migration 0123456789abcdef, owner UID 1000\n", encoding="utf-8")
+        return guard
+
+    def rescues(self):
+        return sorted(Path(self.home).glob("tpot_rollback.*"))
+
+    def summary(self, stdout):
+        return stdout[stdout.rindex("\n### The "):]
+
+    def assert_back_and_warned(self, result, short):
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, output)
+        self.assertNotIn("NOT-REACHED", output)
+        summary = self.summary(result.stdout)
+        self.assertIn(f"Back on master at {short}", summary)
+        self.assertIn("Migrating to a Supported Debian Host", summary)
+        self.assertIn("Running update.sh again repeats", summary)
+
+    def assert_left_alone(self, result, commands, hold=False):
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, output)
+        self.assertNotIn("NOT-REACHED", output)
+        self.assertEqual(self.git("rev-parse", "HEAD"), self.release)
+        self.assertNotIn("systemctl start", self.calls())
+        self.assertIn(self.NOT_RESTARTED, output)
+        for command in commands:
+            self.assertIn(command, output)
+        summary = self.summary(result.stdout)
+        self.assertNotIn("Back on master", summary)
+        if hold:
+            # the guard keeps a start by hand from starting T-Pot: first back by hand, then resume-source
+            self.assertNotIn("sudo systemctl start tpot", output)
+            self.assertIn("After the way back: './tpot migrate resume-source --source ~/tpotce'", output)
+            self.assertIn(MigrationHoldTest.HELD, summary)
+            self.assertIn("Take the way back by hand first", summary)
+            self.assertNotIn("Migrating to a Supported Debian Host", summary)
+        else:
+            self.assertIn("Migrating to a Supported Debian Host", summary)
+
+    def test_a_handover_goes_back_and_starts_t_pot_again(self):
+        archive = self.archive()
+        result = self.run_plain(UPDATE_SH, "-y", TPOT_UPDATE_PREPARED="1", TPOT_UPDATE_ARCHIVE=archive,
+                                TPOT_MIGRATION_GUARD=self.guard)
+        output = result.stdout + result.stderr
+        calls = self.calls()
+        self.assertIn(f"restore.sh -f {archive} -c", calls, output)
+        self.assertIn("systemctl start tpot.service", calls, output)
+        self.assertLess(calls.index("restore.sh -f"), calls.index("systemctl start tpot.service"))
+        self.assertIn("T-Pot runs again, on the release from before this update.", output)
+        self.assert_back_and_warned(result, self.git("rev-parse", "--short", "HEAD"))
+
+    def test_the_tar_of_an_updater_without_a_handover_goes_back(self):
+        archive = self.archive()
+        result = self.refuse("platform", f"myOLD_UPDATER_RAN={shlex.quote(archive)}")
+        calls = self.calls()
+        self.assertIn(f"restore.sh -f {archive} -c", calls, result.stdout + result.stderr)
+        self.assertIn("systemctl start tpot.service", calls)
+        self.assertIn("on the release from before this update", result.stdout)
+        self.assert_back_and_warned(result, self.git("rev-parse", "--short", "HEAD"))
+
+    def test_the_tgz_of_the_tag_goes_back_to_the_commit_before_its_pull(self):
+        tgz = self.tgz()
+        self.old_updater()
+        result = self.refuse("platform", f"myOLD_UPDATER_RAN={shlex.quote(tgz)}")
+        output = result.stdout + result.stderr
+        self.assertEqual(self.git("rev-parse", "HEAD"), self.before, output)
+        env = Path(self.tpotce, ".env")
+        compose = Path(self.tpotce, "docker-compose.yml")
+        self.assertEqual(env.read_text(encoding="utf-8"), self.MINE_ENV)
+        self.assertEqual(stat.S_IMODE(env.stat().st_mode), 0o600)
+        self.assertEqual(compose.read_text(encoding="utf-8"), self.MINE_COMPOSE)
+        self.assertEqual(stat.S_IMODE(compose.stat().st_mode), 0o640)
+        calls = self.calls()
+        self.assertNotIn("restore.sh", calls)
+        self.assertIn("systemctl start tpot.service", calls)
+        self.assertIn("T-Pot runs again, on the release from before this update.", output)
+        self.assertNotIn("on their images", output)
+        self.assert_back_and_warned(result, self.git("rev-parse", "--short", self.before))
+        self.assertIn("version 24.04.1", self.summary(result.stdout))
+        self.assertIn("tgz of ~/tpotce with data/", self.summary(result.stdout))
+
+    def test_a_tgz_without_a_safe_way_back_leaves_the_checkout(self):
+        def checkout():
+            self.git("update-ref", "-m", "checkout: moving from dev to master", "HEAD", self.before)
+            self.git("update-ref", "-m", "pull --force: Fast-forward", "HEAD", self.release)
+
+        def no_reflog():
+            self.old_updater()
+            self.git("reflog", "expire", "--expire=now", "--all")
+
+        def no_pull():
+            self.git("update-ref", "-m", "reset: moving to HEAD", "HEAD", self.before)
+            self.git("update-ref", "-m", "merge origin/master: Fast-forward", "HEAD", self.release)
+
+        def head_itself():
+            self.git("update-ref", "-m", "reset: moving to HEAD", "HEAD", self.release)
+            self.git("update-ref", "-m", "pull --force: Already up to date", "HEAD", self.release)
+
+        def no_ancestor():
+            side = self.git("commit-tree", f"{self.before}^{{tree}}", "-m", "side")
+            self.git("update-ref", "-m", "reset: moving to HEAD", "HEAD", side)
+            self.git("update-ref", "-m", "pull --force: Fast-forward", "HEAD", self.release)
+
+        cases = (("a checkout before the pull", checkout, {}),
+                 ("no reflog", no_reflog, {}),
+                 ("another version in the tgz", self.old_updater, {"version": "24.04.0"}),
+                 ("a tgz newer than the pull", self.old_updater, {"age": -3600}),
+                 ("the newest entry is no pull", no_pull, {}),
+                 # the version of HEAD itself, so that only the check for HEAD refuses it
+                 ("the commit before is HEAD", head_itself, {"version": "24.04.2"}),
+                 ("the commit before is no ancestor", no_ancestor, {}))
+        for name, history, tgz_args in cases:
+            with self.subTest(name):
+                Path(self.home, "calls").unlink(missing_ok=True)
+                self.git("reset", "-q", "--hard", self.release)
+                self.mine()
+                tgz = self.tgz(**tgz_args)
+                history()
+                result = self.refuse("platform", f"myOLD_UPDATER_RAN={shlex.quote(tgz)}")
+                self.assert_left_alone(result, ("git -C ~/tpotce reflog", "git -C ~/tpotce reset --hard",
+                                                f"tar xOf {tgz} .env > ~/tpotce/.env",
+                                                f"tar xOf {tgz} docker-compose.yml > ~/tpotce/docker-compose.yml",
+                                                "sudo systemctl start tpot"))
+                self.assertEqual(Path(self.tpotce, ".env").read_text(encoding="utf-8"), self.MINE_ENV)
+                # the reset by hand leaves the .env of the commit readable for others: the mode goes first
+                output = result.stdout + result.stderr
+                self.assertLess(output.index("git -C ~/tpotce reset --hard"), output.index("chmod 600 ~/tpotce/.env"))
+                self.assertLess(output.index("chmod 600 ~/tpotce/.env"), output.index(f"tar xOf {tgz} .env >"))
+                self.assertEqual(self.rescues(), [])
+
+    def test_a_hold_without_a_safe_way_back_names_the_order(self):
+        guard = self.hold_guard()
+        tgz = self.tgz()
+        self.old_updater()
+        self.git("reflog", "expire", "--expire=now", "--all")
+        result = self.refuse("hold", f"mySTOPPED=1 myOLD_UPDATER_RAN={shlex.quote(tgz)}", guard=guard)
+        self.assert_left_alone(result, ("git -C ~/tpotce reset --hard", "chmod 600 ~/tpotce/.env",
+                                        f"tar xOf {tgz} .env > ~/tpotce/.env"), hold=True)
+        Path(self.home, "calls").unlink(missing_ok=True)
+        self.restore_sh(1)
+        archive = self.archive()
+        result = self.refuse("hold", f"myPREPARED=1 mySTOPPED=1 myARCHIVE={shlex.quote(archive)}", guard=guard)
+        self.assert_left_alone(result, (f"~/tpotce/restore.sh -f {archive} -c",), hold=True)
+
+    def test_a_failed_write_back_keeps_a_copy_of_your_files(self):
+        real = shutil.which("chmod") or "/bin/chmod"
+        self.stub("chmod", f'#!/bin/sh\ncase "$*" in *"/tpotce/.env") exit 1 ;; esac\nexec {real} "$@"\n')
+        tgz = self.tgz()
+        self.old_updater()
+        result = self.refuse("platform", f"myOLD_UPDATER_RAN={shlex.quote(tgz)}", TPOT_MARKS="1")
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, output)
+        # the checkout is back, the files are tried one after the other
+        self.assertEqual(self.git("rev-parse", "HEAD"), self.before, output)
+        self.assertIn("@@tpot changed back", output)
+        self.assertEqual(Path(self.tpotce, "docker-compose.yml").read_text(encoding="utf-8"), self.MINE_COMPOSE)
+        self.assertNotIn("systemctl start", self.calls())
+        rescues = self.rescues()
+        self.assertEqual(len(rescues), 1, output)
+        rescue = rescues[0]
+        self.assertEqual(stat.S_IMODE(rescue.stat().st_mode), 0o700)
+        self.assertEqual(Path(rescue, ".env").read_text(encoding="utf-8"), self.MINE_ENV)
+        self.assertEqual(stat.S_IMODE(Path(rescue, ".env").stat().st_mode), 0o600)
+        self.assertEqual(Path(rescue, "docker-compose.yml").read_text(encoding="utf-8"), self.MINE_COMPOSE)
+        self.assertIn(f"cat {rescue}/.env > ~/tpotce/.env", output)
+        self.assertIn(f"cat {rescue}/docker-compose.yml > ~/tpotce/docker-compose.yml", output)
+        self.assertNotIn(f"tar xOf {tgz}", output)
+        self.assertLess(output.index("chmod 600 ~/tpotce/.env"), output.index(f"cat {rescue}/.env >"))
+
+    def test_a_failed_reset_names_its_reason(self):
+        tgz = self.tgz()
+        self.old_updater()
+        Path(self.tpotce, ".git", "index.lock").touch()
+        result = self.refuse("platform", f"myOLD_UPDATER_RAN={shlex.quote(tgz)}", TPOT_MARKS="1")
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, output)
+        self.assertIn("index.lock", output)
+        self.assertEqual(self.git("rev-parse", "HEAD"), self.release)
+        self.assertNotIn("@@tpot changed back", output)
+        self.assertNotIn("systemctl start", self.calls())
+        rescues = self.rescues()
+        self.assertEqual(len(rescues), 1, output)
+        self.assertIn(f"cat {rescues[0]}/.env > ~/tpotce/.env", output)
+
+    def test_a_tar_without_a_safe_way_back_leaves_the_checkout(self):
+        for name, commit, rc in (("restore.sh fails", None, 1), ("rollback.txt names this commit", "release", 0)):
+            with self.subTest(name):
+                Path(self.home, "calls").unlink(missing_ok=True)
+                self.restore_sh(rc)
+                archive = self.archive(self.release if commit else None)
+                for setup in (f"myOLD_UPDATER_RAN={shlex.quote(archive)}",
+                              f"myPREPARED=1 myARCHIVE={shlex.quote(archive)}"):
+                    result = self.refuse("platform", setup)
+                    self.assert_left_alone(result, (f"~/tpotce/restore.sh -f {archive} -c",))
+
+    def test_a_disabled_service_stays_stopped_unless_s_asks(self):
+        self.systemctl("disabled")
+        archive = self.archive()
+        result = self.refuse("platform", f"myOLD_UPDATER_RAN={shlex.quote(archive)}")
+        self.assertIn(f"restore.sh -f {archive} -c", self.calls(), result.stdout + result.stderr)
+        self.assertNotIn("systemctl start", self.calls())
+        self.assertIn("'sudo systemctl start tpot' brings it back", self.summary(result.stdout))
+        Path(self.home, "calls").unlink()
+        result = self.refuse("platform", f"myOLD_UPDATER_RAN={shlex.quote(archive)} mySTART=1")
+        self.assertIn("systemctl start tpot.service", self.calls(), result.stdout + result.stderr)
+
+    def test_a_hold_goes_back_but_does_not_start(self):
+        guard = self.hold_guard()
+        archive = self.archive()
+        result = self.refuse("hold", f"myPREPARED=1 mySTOPPED=1 myARCHIVE={shlex.quote(archive)}", guard=guard)
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, output)
+        calls = self.calls()
+        self.assertIn(f"restore.sh -f {archive} -c", calls, output)
+        self.assertNotIn("systemctl start", calls)
+        self.assertIn("tpot migrate resume-source --source ~/tpotce", output)
+        summary = self.summary(result.stdout)
+        self.assertIn(MigrationHoldTest.HELD, summary)
+        self.assertIn("Back on master at", summary)
+        self.assertNotIn("brings it back", summary)
+        # the tgz of the tag 24.04.1 the same way
+        Path(self.home, "calls").unlink()
+        tgz = self.tgz()
+        self.old_updater()
+        result = self.refuse("hold", f"mySTOPPED=1 myOLD_UPDATER_RAN={shlex.quote(tgz)}", guard=guard)
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, output)
+        self.assertEqual(self.git("rev-parse", "HEAD"), self.before, output)
+        self.assertEqual(Path(self.tpotce, ".env").read_text(encoding="utf-8"), self.MINE_ENV)
+        self.assertNotIn("systemctl start", self.calls())
+        summary = self.summary(result.stdout)
+        self.assertIn(MigrationHoldTest.HELD, summary)
+        self.assertIn(f"Back on master at {self.git('rev-parse', '--short', self.before)}", summary)
+        self.assertNotIn("Migrating to a Supported Debian Host", summary)
+
+    def test_a_run_of_its_own_changes_nothing(self):
+        self.old_updater()
+        result = self.run_plain(UPDATE_SH, "-y", TPOT_MIGRATION_GUARD=self.guard)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.git("rev-parse", "HEAD"), self.release)
+        self.assertNotIn("restore.sh", self.calls())
+        self.assertNotIn("systemctl", self.calls())
 
 
 class SummaryTest(Scripts):
@@ -2188,8 +2819,7 @@ class KibanaObjectsMigrationTest(Scripts):
         archive = os.path.join(self.home, "20261016101010_tpot_backup.tar")
         with tarfile.open(archive, "w") as tar:
             tar.add(os.path.join(source, "env"), arcname="env")
-        call = ('myCOMPOSEFILE="$HOME/tpotce/docker-compose.yml"\n'
-                + ('' if handover else f'myARCHIVE={shlex.quote(archive)}\n')
+        call = (('' if handover else f'myARCHIVE={shlex.quote(archive)}\n')
                 + 'fuRESTORE\nprintf "DONE %s\\n" "${myDONE[@]}"\n')
         extra = {"TPOT_UPDATE_PREPARED": "1", "TPOT_UPDATE_ARCHIVE": archive} if handover else \
                 {"TPOT_UPDATE_PREPARED": None, "TPOT_UPDATE_ARCHIVE": None}
@@ -2333,7 +2963,7 @@ class KibanaObjectsMigrationTest(Scripts):
                 # this run's backup (fuBACKUP) holds the .env as it is now, as its member env
                 f'cp "$HOME/tpotce/.env" {shlex.quote(backup)}/env\n'
                 f'tar cf {shlex.quote(archive)} -C {shlex.quote(backup)} env\n'
-                f'myARCHIVE={shlex.quote(archive)}\nmyCOMPOSEFILE="$HOME/tpotce/docker-compose.yml"\n'
+                f'myARCHIVE={shlex.quote(archive)}\n'
                 'fuRESTORE\nprintf "DONE %s\\n" "${myDONE[@]}"\n')
         result = self.source_update(call, TPOT_UPDATE_PREPARED=None, TPOT_UPDATE_ARCHIVE=None)
         out = result.stdout + result.stderr
@@ -4042,6 +4672,75 @@ class StopTest(Scripts):
         self.assertIn("systemctl start tpot", out)                  # T-Pot was stopped for the restore
         self.assertNotIn("systemctl start", self.calls())
         self.assert_went_no_further()
+
+
+class StopCleanupTest(Scripts):
+    """fuSTOP_TPOT removes only what belongs to T-Pot: the containers and networks of its Compose project
+    (the name docker compose gives ~/tpotce/docker-compose.yml, tpotce where it cannot tell) and those of
+    the Elasticsearch step. Containers, networks and volumes of others stay; images: only the untagged."""
+
+    def docker(self, project="tpotce", config='{"name": "tpotce"}'):
+        label = f"label=com.docker.compose.project={project}"
+        config_line = f"echo {shlex.quote(config)}" if config else "exit 1"
+        self.stub("docker", f'''#!/bin/sh
+echo "docker $*" >> "$HOME/calls"
+case "$*" in
+  compose*" config"*) {config_line} ;;
+  "ps -aq --filter {label}") printf 'c1\\nc2\\n' ;;
+  "ps -aq"*) printf 'c1\\nc2\\nforeign\\n' ;;
+  "network ls -q --filter {label}") printf 'n1\\n' ;;
+  "network ls -q"*) printf 'n1\\nforeign_net\\n' ;;
+esac
+exit 0
+''')
+
+    def stop(self):
+        result = self.source_update("fuLOG_START; fuSTOP_TPOT")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return [line for line in self.calls().splitlines() if line.startswith("docker ")]
+
+    def assert_only_tpot(self, calls, project):
+        self.assertIn(f"docker ps -aq --filter label=com.docker.compose.project={project}", calls)
+        self.assertIn("docker stop c1 c2", calls)
+        self.assertIn("docker rm -v c1 c2", calls)
+        self.assertIn("docker stop -t 120 tpot_kb_step tpot_es_step", calls)
+        self.assertIn("docker rm -v tpot_kb_step tpot_es_step", calls)
+        self.assertIn(f"docker network ls -q --filter label=com.docker.compose.project={project}", calls)
+        self.assertIn("docker network rm n1", calls)
+        self.assertIn("docker network rm tpot_es_step", calls)
+        self.assertIn("docker image prune -f", calls)
+        # a network goes only once no container is attached to it any more
+        self.assertLess(calls.index("docker rm -v c1 c2"), calls.index("docker network rm n1"))
+        self.assertLess(calls.index("docker rm -v tpot_kb_step tpot_es_step"),
+                        calls.index("docker network rm tpot_es_step"))
+        for line in calls:
+            self.assertNotIn("foreign", line)
+            self.assertNotIn("container prune", line)
+            self.assertNotIn("volume prune", line)
+            self.assertNotIn("network prune", line)
+            self.assertNotEqual(line, "docker ps -aq")
+
+    def test_only_the_containers_and_networks_of_tpot_go(self):
+        self.docker()
+        calls = self.stop()
+        self.assertIn("systemctl stop tpot.service", self.calls())
+        self.assert_only_tpot(calls, "tpotce")
+
+    def test_the_project_name_comes_from_docker_compose(self):
+        self.docker(project="mytpot", config='{"name": "mytpot"}')
+        calls = self.stop()
+        self.assertTrue(any(line.startswith("docker compose -f " + os.path.join(self.home, "tpotce",
+                                                                                "docker-compose.yml"))
+                            and " config" in line for line in calls), calls)
+        self.assert_only_tpot(calls, "mytpot")
+
+    def test_tpotce_where_docker_compose_cannot_tell(self):
+        self.docker(config="")
+        self.assert_only_tpot(self.stop(), "tpotce")
+
+    def test_a_project_name_compose_would_not_give_is_not_taken(self):
+        self.docker(config='{"name": "a b;rm"}')
+        self.assert_only_tpot(self.stop(), "tpotce")
 
 
 if __name__ == "__main__":

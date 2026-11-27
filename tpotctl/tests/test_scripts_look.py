@@ -296,3 +296,44 @@ class CdpathTest(base.Harness):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DistributionTextTest(unittest.TestCase):
+    """From 24.04.2 T-Pot runs on Debian 13 only (Raspberry Pi OS for T-Pot Mobile): no text recommends a
+    distribution among others, and the installation part of the README describes no other one."""
+
+    # where a person reads about the host; the CHANGELOG keeps what it said then
+    PLACES = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "deploy.sh",
+              "docker/tpotinit/dist/entrypoint.sh", "README.md", "CLAUDE.md")
+    RECOMMENDS = re.compile(r"Debian (?:is )?(?:the )?(?:recommended|preferred)|preferred host|"
+                            r"\((?:Debian|Linux) (?:recommended|preferred)|preferably Debian")
+    OTHERS = ("Ubuntu", "Fedora", "RHEL", "Red Hat", "Rocky", "AlmaLinux", "openSUSE")
+
+    def places(self):
+        found = list(self.PLACES)
+        for folder in ("tpotctl", os.path.join("tpotctl", "screens"), os.path.join("tpotctl", "widgets"),
+                       os.path.join("tpotctl", "checks")):
+            found += [os.path.join(folder, name) for name in sorted(os.listdir(os.path.join(REPO, folder)))
+                      if name.endswith(".py")]
+        return found
+
+    def test_no_text_recommends_another_distribution(self):
+        hits = []
+        for rel in self.places():
+            with open(os.path.join(REPO, rel), encoding="utf-8") as handle:
+                for number, line in enumerate(handle, 1):
+                    if self.RECOMMENDS.search(line):
+                        hits.append(f"{rel}:{number}: {line.strip()[:120]}")
+        self.assertEqual(hits, [])
+
+    def test_the_readme_installs_on_debian_only(self):
+        with open(os.path.join(REPO, "README.md"), encoding="utf-8") as handle:
+            readme = handle.read()
+        self.assertNotIn("## Red Hat Enterprise Linux", readme)
+        self.assertNotIn("#red-hat-enterprise-linux", readme)
+        installation = readme[readme.index("\n# Installation"):readme.index("\n## Installation Types")]
+        self.assertEqual([name for name in self.OTHERS if name in installation], [])
+        # the one transition a Debian 12 host gets, named where the hosts are
+        choose = installation[installation.index("## Choose your distro"):]
+        choose = choose[:choose.index("\n## ", 5)]
+        self.assertIn("Debian 12", choose)

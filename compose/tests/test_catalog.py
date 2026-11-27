@@ -84,12 +84,23 @@ class CatalogTest(unittest.TestCase):
                 with self.subTest(edition=edition, service=name):
                     self.assertIn(name, self.catalog.catalog.services)
 
+    def test_mobile_has_no_sensor_ingress(self):
+        services = self.catalog.editions["MOBILE"].services
+        self.assertFalse(services["logstash"].get("ports"))
+        self.assertIn("TPOT_TYPE=${TPOT_TYPE:-MOBILE}", services["logstash"]["environment"])
+        self.assertIn("elasticsearch", services["logstash"]["depends_on"])
+        self.assertIn("logstash", services["ewsposter"]["depends_on"])
+
     def test_editions_only_differ_in_allowed_keys(self):
         for edition, compose in self.catalog.editions.items():
             allowed = ALLOWED
             for name, definition in compose.services.items():
                 reference = dict(self.catalog.catalog.services[name])
                 reference.pop("x-tpot", None)
+                if (edition, name) == ("MOBILE", "logstash"):
+                    reference["environment"] = [
+                        "TPOT_TYPE=${TPOT_TYPE:-MOBILE}" if item == "TPOT_TYPE=${TPOT_TYPE:-HIVE}" else item
+                        for item in reference["environment"]]
                 differ = {k for k in set(definition) | set(reference) if definition.get(k) != reference.get(k)}
                 with self.subTest(edition=edition, service=name):
                     self.assertFalse(differ - allowed, f"differs in {sorted(differ - allowed)}")

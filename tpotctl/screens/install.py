@@ -323,18 +323,20 @@ class InstallApp(ArrowNav, App):
     def fill_editions(self) -> None:
         options = self.query_one("#edition-list", OptionList)
         options.clear_options()
-        for edition in installer.EDITIONS:
+        raspberry_pi_os = installer.is_raspberry_pi_os()
+        for edition in installer.available_editions(raspberry_pi_os):
             label = Text()
             label.append(f"{edition.title:<9}", style="bold")
             label.append(edition.description, style=theme.color("glass"))
             label.append(f"\n         {edition.ram_gb} GB RAM, {edition.disk_gb} GB disk recommended",
                          style=theme.color("ash"))
             options.add_option(Option(label, id=edition.letter))
-        custom = Text()
-        custom.append(f"{'Custom':<9}", style="bold")
-        custom.append("Start from an edition, switch services on and off, move ports (the customizer).",
-                      style=theme.color("glass"))
-        options.add_option(Option(custom, id="custom"))
+        if raspberry_pi_os is False:
+            custom = Text()
+            custom.append(f"{'Custom':<9}", style="bold")
+            custom.append("Start from an edition, switch services on and off, move ports (the customizer).",
+                          style=theme.color("glass"))
+            options.add_option(Option(custom, id="custom"))
         options.highlighted = 0
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
@@ -374,7 +376,7 @@ class InstallApp(ArrowNav, App):
     def open_customizer(self) -> None:
         from tpotctl.screens.customizer import CustomizerScreen, core
         catalog = core.Catalog()
-        base = "SENSOR" if self.answers.edition.letter == "s" else "STANDARD"
+        base = self.answers.edition.key.upper()
         self.push_screen(CustomizerScreen(catalog, core.Selection(base), core.DEFAULT_MAX_NETWORKS),
                          lambda chosen: self.customized(catalog, chosen))
 
@@ -392,7 +394,7 @@ class InstallApp(ArrowNav, App):
             self.notify(str(err), title="Not written", severity="error", timeout=10)
             return
         role = result.role()
-        letter = "s" if role == "SENSOR" or selection.base == "MOBILE" else "h"
+        letter = {"MOBILE": "m", "SENSOR": "s", "HIVE": "h"}[role]
         base_edition = installer.EDITION_BY_LETTER[letter]
         self.answers.edition = installer.Edition(letter, base_edition.key, f"Custom ({selection.base})",
                                                  "your own selection of services", letter == "h",
@@ -475,7 +477,10 @@ class InstallApp(ArrowNav, App):
             self.notify(f"{env_path} cannot be read ({err}), the settings stay as they are.", severity="warning")
             return
         self.draft = dict(self.env_settings.values)
-        self.draft.setdefault("TPOT_TYPE", "SENSOR" if self.answers.edition.letter == "s" else "HIVE")
+        if self.answers.edition.letter == "m":
+            self.draft["TPOT_TYPE"] = "MOBILE"
+        else:
+            self.draft.setdefault("TPOT_TYPE", "SENSOR" if self.answers.edition.letter == "s" else "HIVE")
         first = FIRST_SETTINGS + (DEBIAN_SETTINGS if self.on_debian() else [])
         rows = []
         for rule in self.env_settings.relevant(values=self.draft):
@@ -578,6 +583,16 @@ class InstallApp(ArrowNav, App):
             self.query_one("#ins-next", Button).focus()
 
     def problem_review(self) -> str:
+        if self.checks is None:
+            return "checking this host"
+        failed = [check.title for check in self.checks if check.state == "fail"]
+        if failed:
+            return f"{', '.join(failed)}: not ready for T-Pot"
+        raspberry_pi_os = installer.is_raspberry_pi_os()
+        if raspberry_pi_os is None:
+            return "cannot verify the Raspberry Pi OS marker"
+        if raspberry_pi_os and (self.answers.edition.key != "mobile" or self.answers.custom_compose):
+            return "Raspberry Pi OS supports only the built-in T-Pot Mobile edition"
         if self.answers.sudo_mode not in ("secure", "convenient"):
             return "choose a sudo mode"
         if self.answers.sudo_mode == "secure":

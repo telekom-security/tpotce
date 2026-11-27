@@ -36,6 +36,16 @@ def mode(path):
 class ScriptsTest(unittest.TestCase):
     """No script of tpotinit gives the data folder an execute bit on files any more."""
 
+    def test_absent_web_folders_are_optional_but_chmod_failures_are_not(self):
+        with tempfile.TemporaryDirectory() as folder:
+            result = subprocess.run(["bash", "-c", '''
+                source "$1"
+                chmod() { echo "chmod:${3##*/}" >&2; return 1; }
+                fuDATA_WEB_MODES "$2/missing" "$2"
+            ''', "test", str(HELPER), folder], capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stderr.strip(), f"chmod:{Path(folder).name}")
+
     def test_no_recursive_numeric_mode(self):
         for path in (CLEAN, ENTRYPOINT, UPDATEIP):
             text = path.read_text()

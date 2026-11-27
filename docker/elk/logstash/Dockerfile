@@ -39,6 +39,10 @@ RUN rm -f /usr/share/logstash/pipeline/logstash.conf && \
         /usr/share/logstash/data \
         /usr/share/logstash/pipeline
 
+# Select settings at startup without rewriting pipelines.yml in the running container.
+RUN cp -a /usr/share/logstash/config /usr/share/logstash/config-mobile
+COPY dist/pipelines-mobile.yml /usr/share/logstash/config-mobile/pipelines.yml
+
 HEALTHCHECK --retries=10 CMD test -f /tmp/tpot-waiting || curl -s -XGET 'http://127.0.0.1:9600'
 
 USER logstash

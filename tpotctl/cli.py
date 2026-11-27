@@ -66,7 +66,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = ArgumentParser(
         prog="tpot", description="Configure and run T-Pot.",
         epilog="Without a command tpot opens the T-Pot Manager, its menu. update, restore and customize hand all their "
-               "options to update.sh, restore.sh and compose/customizer.py, i.e. tpot update -h. status, ps, "
+               "options to update.sh, restore.sh and compose/customizer.py, i.e. tpot update -h. migrate uses a "
+               "standard-library path without the Textual venv. status, ps, "
                "images, start, stop, restart, update, restore, check, uninstall, sudo, sensors and elastic need a T-Pot "
                "host (Linux with systemd); users, sensors and elastic a HIVE.")
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
@@ -84,6 +85,9 @@ def build_parser() -> argparse.ArgumentParser:
                                   "your own, or one of a SENSOR that still runs Logstash, it adapts after a yes, "
                                   "without a terminal with --adapt-compose)")
     sub.add_parser("restore", help="restore a backup, runs restore.sh with your options")
+    migrate = sub.add_parser("migrate", help="inspect, export, validate or stage a private migration package")
+    from tpotctl.migration_cli import add_arguments as add_migration_arguments
+    add_migration_arguments(migrate)
     sub.add_parser("customize", help="choose edition, services and ports, runs compose/customizer.py")
     install = sub.add_parser("install", help="install T-Pot on this host with the assistant (install.sh -s does it "
                                              "without questions)")
@@ -185,7 +189,9 @@ def build_parser() -> argparse.ArgumentParser:
     change.add_argument("--host")
     change.add_argument("--ssh-user")
     change.add_argument("--ssh-port", type=int)
-    change.add_argument("--hive-address", help="IPv4 or name the sensor reaches this HIVE on")
+    change.add_argument("--hive-address", help="IPv4 or name the sensor reaches this HIVE on; only the registry, "
+                                               "the sensor keeps its address: tpot sensors hive-address changes it "
+                                               "there")
     cert = sensor_actions.add_parser("cert", help="the certificate the sensors check this HIVE with")
     cert.add_argument("--add", action="append", default=[], metavar="ADDRESS",
                       help="an IP or name of this HIVE the certificate has to cover, repeatable")
@@ -196,6 +202,16 @@ def build_parser() -> argparse.ArgumentParser:
     cert.add_argument("--no-restart", action="store_true", help="do not reload nginx after --renew")
     cert.add_argument("--no-become-pass", action="store_true", help="sudo on the sensors needs no password")
     cert.add_argument("-y", "--yes", action="store_true", help="do not ask")
+    hive_address = sensor_actions.add_parser(
+        "hive-address", help="set the address the sensors reach this HIVE on (their TPOT_HIVE_IP) and restart "
+                             "T-Pot there, the certificate of this HIVE renewed where it does not cover it",
+        epilog="Exit codes: 0 every sensor tried sends to the new address, 1 one did not, none could be tried or "
+               "one that should get the new certificate could not be asked, 2 usage, an address or certificate "
+               "that cannot be taken, no terminal to ask, 130 cancelled.")
+    hive_address.add_argument("address", metavar="ADDRESS", help="IPv4 or name the sensors reach this HIVE on")
+    hive_address.add_argument("names", nargs="*", metavar="NAME", help="no names: all registered sensors")
+    hive_address.add_argument("--no-become-pass", action="store_true", help="sudo on the sensors needs no password")
+    hive_address.add_argument("-y", "--yes", action="store_true", help="do not ask")
     importing = sensor_actions.add_parser("import", help="give the sensors of lswebpasswd and lswebpasswd.lost "
                                                          "that LS_WEB_USER does not name their access back")
     importing.add_argument("-y", "--yes", action="store_true", help="do not ask")
@@ -1392,8 +1408,7 @@ def run_fleet_update(args, registry, console) -> int:
         return _fleet_monitor(coordinator, state["run_id"], password, args, console)
 
     password = _fleet_password(args)
-    pending = [run for run in coordinator.store.list_runs()
-               if run["phase"] in ("preparing", "running", "paused", "aborting", "prepared", "precheck_failed")]
+    pending = [run for run in coordinator.store.list_runs() if run["phase"] in tfleet.OPEN_PHASES]
     if pending:
         if not sys.stdin.isatty():
             names = ", ".join(run["run_id"] for run in pending)
@@ -1482,7 +1497,9 @@ def run_sensors(args) -> int:
         ops.require_config_current()
     if command == "sudo":
         ops.require_linux_host("tpot sensors sudo")
-    if command == "add" or (command == "cert" and args.distribute is not None):
+    if command == "hive-address":
+        ops.require_linux_host("tpot sensors hive-address")
+    if command in ("add", "hive-address") or (command == "cert" and args.distribute is not None):
         ops.require_config_current()
     registry = tsensors.Registry()
     if command == "sudo":
@@ -1528,6 +1545,8 @@ def run_sensors(args) -> int:
         return 0
     if command == "cert":
         return run_sensor_cert(args, registry, console)
+    if command == "hive-address":
+        return run_sensor_hive_address(args, registry, console)
     return run_sensor_add(args, registry, console)
 
 
@@ -1662,6 +1681,8 @@ def run_sudo(args, registry=None) -> int:
 
 
 CERT_RENEW = "tpot sensors cert --renew --distribute"
+HIVE_WAIT = 300         # s after the play of tpot sensors hive-address for the HIVE to hear of each sensor
+HIVE_POLL = 10
 
 
 def certificate_backup_note(registry, stamp: str, *, failed_reload: bool = False) -> str:
@@ -1745,18 +1766,10 @@ def run_sensor_cert(args, registry, console) -> int:
         if not chosen:
             say.info("No sensors are registered, there is nothing to copy.", console.file)
             return 0
-        reachable = [s for s in chosen if s.host and s.ssh_user and s.access]
+        reachable = [s for s in chosen if not sensor_skip_hint(s)]
         for sensor in chosen:
-            if sensor in reachable:
-                continue
-            # sensors set adds where a sensor is, never its access
-            if not sensor.access:
-                hint = (f"{sensor.name} is skipped, it has no access to this HIVE: tpot sensors import takes its "
-                        f"line of lswebpasswd over where T-Pot keeps one, else tpot sensors add deploys it again")
-            else:
-                hint = (f"{sensor.name} is skipped, add where it is: tpot sensors set {sensor.name} "
-                        f"--host ... --ssh-user ...")
-            console.print(Text(hint, style="yellow"))
+            if sensor not in reachable:
+                console.print(Text(sensor_skip_hint(sensor), style="yellow"))
         failed = {s.name for s in copy_certificate(reachable, not args.no_become_pass)} if reachable else set()
         reached = [s.name for s in reachable if s.name not in failed]
         if reached:
@@ -1772,10 +1785,276 @@ def run_sensor_cert(args, registry, console) -> int:
     return 0
 
 
+def hive_address_targets(chosen, address: str, busy, console):
+    """The sensors of `chosen` that can take the new address, each with what it said of itself before
+    (probe_sensor), the names SSH did not let in and the ones a fleet update, an update or a migration holds;
+    every other one is named with the reason."""
+    from rich.text import Text
+    from tpotctl import sensors as tsensors
+    targets, probes, ssh_failed, held = [], {}, set(), set()
+    for sensor in chosen:
+        name, found = sensor.name, None
+        hint = sensor_skip_hint(sensor)
+        if not hint and name in busy:
+            # a restart would disturb its checks, and its way back would bring the old address again
+            hint = (f"{name} is in a saved fleet update, finish it first: tpot sensors update --resume, or drop "
+                    f"it: tpot sensors update --discard")
+            held.add(name)
+        if not hint:
+            state = tsensors.check_ssh(sensor.host, sensor.ssh_user, port=sensor.ssh_port)
+            if state == "key":
+                hint = (f"{name}: no key login on {sensor.ssh_user}@{sensor.host}, run: "
+                        + " ".join(tsensors.copy_id_command(sensor.host, sensor.ssh_user, sensor.ssh_port)))
+            elif state != "ok":
+                hint = f"{name} cannot be reached over SSH ({sensor.host}:{sensor.ssh_port})"
+            if hint:
+                ssh_failed.add(name)
+        if not hint:
+            try:
+                found = tsensors.probe_sensor(sensor)
+            except tsensors.SensorsError as err:
+                hint = str(err)
+            else:
+                hint = tsensors.hive_skip_reason(found, name)
+                if found.hold or found.update_locked:
+                    held.add(name)
+        if hint:
+            console.print(Text(hint, style="yellow"))
+            continue
+        targets.append(sensor)
+        probes[name] = found
+        if found.hive_ip == address:
+            console.print(Text(f"{name}: TPOT_HIVE_IP is {address} already, T-Pot restarts there"))
+        else:
+            console.print(Text(f"{name}: TPOT_HIVE_IP {found.hive_ip or '(not set)'} becomes {address}"))
+    return targets, probes, ssh_failed, held
+
+
+def certificate_receivers(sensors, held: set, busy, console) -> list:
+    """The ones of `sensors` that take the new certificate. sensor_cert.yml restarts
+    their Fluent Bit, which would start it where a fleet update, an update or a migration keeps T-Pot
+    stopped: those go into `held`, the ones it cannot check are named and left out as well."""
+    from rich.text import Text
+    from tpotctl import sensors as tsensors
+    receivers = []
+    for sensor in sensors:
+        if sensor_skip_hint(sensor) or sensor.name in held:
+            continue
+        if sensor.name in busy:
+            held.add(sensor.name)
+            continue
+        try:
+            found = tsensors.probe_sensor(sensor)
+        except tsensors.SensorsError as err:
+            console.print(Text(str(err), style="yellow"))
+            continue
+        if found.hold or found.update_locked:
+            held.add(sensor.name)
+            continue
+        receivers.append(sensor)
+    return receivers
+
+
+def await_hive_address(pending, kinds, started_before, since: float, done: set, console) -> None:
+    """Asks Elasticsearch every HIVE_POLL s, up to HIVE_WAIT s after `since`, until the HIVE heard of each
+    of `pending` at its new address; the names it heard of go into `done`, so a Ctrl+C that ends the wait
+    leaves the ones heard of so far there."""
+    from tpotctl import sensors as tsensors
+    pending, warned = list(pending), False
+    while pending:
+        try:
+            beats, refused = tsensors.fetch_heartbeats()
+        except tsensors.SensorsError as err:
+            if not warned:
+                say.warn(f"{err}, asking again", console.file)
+                warned = True
+        else:
+            for name in list(pending):
+                if tsensors.confirmed(kinds[name], name, beats, refused, since, started_before.get(name)):
+                    pending.remove(name)
+                    done.add(name)
+        if not pending or time.time() >= since + HIVE_WAIT:
+            break
+        time.sleep(HIVE_POLL)
+
+
+def run_sensor_hive_address(args, registry, console) -> int:
+    from tpotctl import fleet
+    from tpotctl import sensors as tsensors
+    try:
+        address = tsensors.check_hive_address(args.address)
+    except tsensors.SensorsError as err:
+        error(str(err))
+        return 2
+    chosen = [registry.get(n) for n in dict.fromkeys(args.names)] if args.names else registry.sensors()
+    if not chosen:
+        say.info("No sensors are registered, there is nothing to change.", console.file)
+        return 0
+    # a certificate that cannot be read ends the command (SensorsError, exit 1): it is never "none"
+    info = tsensors.cert_info(registry.cert)
+    sans = info.sans if info else []
+    renew = not tsensors.covers(address, sans)
+    if renew and info and not info.self_signed:
+        error(tsensors.ca_renew_refusal(info, os.path.dirname(registry.cert)))
+        return 2
+    try:
+        beats, _refused = tsensors.fetch_heartbeats()
+    except tsensors.SensorsError as err:
+        error(f"{err}: start T-Pot on this HIVE first")
+        return 1
+    started_before = {name: beat.started_at for name, beat in beats.items()}
+    try:
+        busy = fleet.open_targets(fleet.RunStore().list_runs())
+    except fleet.FleetError as err:
+        error(str(err))
+        return 1
+
+    targets, probes, ssh_failed, held = hive_address_targets(chosen, address, busy, console)
+    if not targets:
+        say.warn("No sensor can take the new address, nothing is changed.", console.file)
+        return 1
+    names = {s.name for s in targets}
+    kinds = {name: tsensors.check_kind(found) for name, found in probes.items()}
+    # the new certificate goes to every other sensor this HIVE reaches: they check this HIVE with it too
+    chosen_names = {s.name for s in chosen}
+    rest = [s for s in registry.sensors() if s.name not in chosen_names]
+    receivers = {s.name for s in certificate_receivers(rest, held, busy, console)} if renew else set()
+    unchecked = {s.name for s in rest if not sensor_skip_hint(s)} - held - receivers if renew else set()
+    others = [s for s in registry.sensors() if s.name in receivers or (
+        s.name in chosen_names and not sensor_skip_hint(s) and s.name not in names | ssh_failed | held)]
+    if renew:
+        console.print(f"The certificate of this HIVE does not cover {address}, it is issued anew first.")
+        if others:
+            console.print(f"Only the new certificate goes to: {', '.join(s.name for s in others)}")
+    if not confirm(f"Set {address} on {len(targets)} sensor(s) and restart T-Pot there?", args.yes):
+        return 1
+    # the question above was the one, the renew asks no second
+    if renew and not renew_certificate(registry, list(dict.fromkeys(registry.hive_addresses() + [address])),
+                                       console, True, True, current=sans):
+        return 1
+
+    interrupted, failed, cert_failed, done = None, set(), set(), set()
+    try:
+        failed = {s.name for s in play_sensors(
+            targets, lambda inventory: tsensors.hive_address_command(inventory, address, not args.no_become_pass),
+            "sensor_hive.retry")}
+    except KeyboardInterrupt as interrupt:
+        interrupted, failed = interrupt, set(names)
+    since = time.time()
+    if renew and others:
+        cert_failed = {s.name for s in others}
+        if not interrupted:
+            try:
+                cert_failed = {s.name for s in copy_certificate(others, not args.no_become_pass)}
+            except KeyboardInterrupt as interrupt:
+                interrupted = interrupt
+    pending = [s.name for s in targets if kinds[s.name] in ("heartbeat", "refused") and s.name not in failed]
+    if pending and not interrupted:
+        try:
+            await_hive_address(pending, kinds, started_before, since, done, console)
+        except KeyboardInterrupt as interrupt:
+            interrupted = interrupt
+
+    # the registry follows what each sensor has now, a Ctrl+C here would leave it behind
+    after, errors = {}, {}
+    with bootstrap.sigint_to(lambda *_: None):
+        for sensor in targets:
+            try:
+                after[sensor.name] = tsensors.probe_sensor(sensor).hive_ip
+            except tsensors.SensorsError as err:
+                errors[sensor.name] = str(err)
+                continue
+            if after[sensor.name] == address:
+                registry.update(sensor.name, hive_address=address)
+
+    by_hand, sent = [], set()
+    for sensor in sorted(targets, key=lambda s: s.name):
+        name, kind = sensor.name, kinds[sensor.name]
+        if name in errors:
+            say.warn(errors[name], console.file)
+            by_hand.append(name)
+        elif after[name] != address:
+            say.warn(f"{name} keeps TPOT_HIVE_IP={after[name] or '(not set)'}", console.file)
+            by_hand.append(name)
+        elif name in failed and renew and probes[name].hive_ip == address:
+            # the play copies hive.crt before it changes .env: only a changed line says the copy was done
+            say.warn(f"{name} had TPOT_HIVE_IP={address} already, but the play stopped there, maybe before it got "
+                     f"the new certificate", console.file)
+            by_hand.append(name)
+        elif name in failed:
+            say.warn(f"{name} has TPOT_HIVE_IP={address}, but the play stopped there: T-Pot takes it from its "
+                     f"next start (sudo systemctl restart tpot)", console.file)
+        elif kind == "logstash":
+            say.warn(f"{name} has TPOT_HIVE_IP={address}, but its compose file still names logstash, which sends "
+                     f"nothing in this release: on the sensor run ~/tpotce/update.sh --adapt-compose", console.file)
+        elif kind == "none":
+            say.warn(f"{name} has TPOT_HIVE_IP={address}, but runs nothing that sends to this HIVE: on the sensor "
+                     f"run ~/tpotce/update.sh --adapt-compose or tpot customize", console.file)
+        elif name in done:
+            sent.add(name)
+            if kind == "heartbeat":
+                say.ok(f"{name} sends to {address}.", console.file)
+            else:
+                say.ok(f"{name} reaches this HIVE, update needed: tpot sensors update {name}", console.file)
+        else:
+            text = f"{name} is not confirmed yet: this HIVE has not heard of it since its restart"
+            if kind == "refused":
+                text += ("; it shows up once it sends an event, tpot sensors list then says update needed "
+                         "(events refused)")
+            say.warn(text, console.file)
+            by_hand.append(name)
+    if by_hand:
+        say.warn(f"By hand for {', '.join(by_hand)}: set TPOT_HIVE_IP={address} in ~/tpotce/.env on the sensor, "
+                 f"copy {registry.cert} of this HIVE to ~/tpotce/data/hive.crt there, restart T-Pot (sudo "
+                 f"systemctl restart tpot), then here for each: tpot sensors set NAME --hive-address {address}",
+                 console.file)
+    if renew:
+        reached = [s.name for s in others if s.name not in cert_failed]
+        if reached:
+            say.ok(f"{', '.join(reached)} {'has' if len(reached) == 1 else 'have'} the new certificate.",
+                   console.file)
+        missed = [s.name for s in registry.sensors() if s.access and s.name not in names
+                  and (s.name in cert_failed | ssh_failed | unchecked or not (s.host and s.ssh_user))]
+        if missed:
+            say.warn(f"By hand for {', '.join(missed)}: copy {registry.cert} of this HIVE to ~/tpotce/data/hive.crt "
+                     f"on the sensor, then restart T-Pot there (sudo systemctl restart tpot).", console.file)
+        for name in sorted(held):
+            say.warn(f"{name} gets the new certificate once the update or migration there is done: tpot sensors "
+                     f"cert --distribute {name}", console.file)
+    back = {}
+    for sensor in sorted(targets, key=lambda s: s.name):
+        before = probes[sensor.name].hive_ip
+        if after.get(sensor.name) == address and before and before != address:
+            back.setdefault(before, []).append(sensor.name)
+    for before, moved in back.items():
+        say.info(f"Back to the old address: tpot sensors hive-address {before} {' '.join(moved)}", console.file)
+    if interrupted:
+        raise interrupted
+    return 0 if sent == names and not cert_failed and not unchecked else 1
+
+
+def sensor_skip_hint(sensor) -> str:
+    """Why a registered sensor cannot be reached from here, "" when it can (access, host and user known)."""
+    # sensors set adds where a sensor is, never its access
+    if not sensor.access:
+        return (f"{sensor.name} is skipped, it has no access to this HIVE: tpot sensors import takes its line of "
+                f"lswebpasswd over where T-Pot keeps one, else tpot sensors add deploys it again")
+    if not (sensor.host and sensor.ssh_user):
+        return f"{sensor.name} is skipped, add where it is: tpot sensors set {sensor.name} --host ... --ssh-user ..."
+    return ""
+
+
 def copy_certificate(sensors, become_pass: bool) -> list:
-    """sensor_cert.yml for `sensors`; the ones it did not reach. Ansible names the hosts that failed or were
-    unreachable in its retry file (the inventory names are sensor names); a failed run without one, or with
-    none of them, counts for all."""
+    """sensor_cert.yml for `sensors`; the ones it did not reach."""
+    from tpotctl import sensors as tsensors
+    return play_sensors(sensors, lambda inventory: tsensors.distribute_command(inventory, become_pass),
+                        "sensor_cert.retry")
+
+
+def play_sensors(sensors, command, retry: str) -> list:
+    """The play command(inventory) over `sensors`; the ones it did not reach. Ansible names the hosts that
+    failed or were unreachable in its retry file `retry` (the inventory names are sensor names); a failed run
+    without one, or with none of them, counts for all. A Ctrl+C that ends the play goes on to the caller."""
     import shutil
     import tempfile
     from tpotctl import sensors as tsensors
@@ -1783,10 +2062,10 @@ def copy_certificate(sensors, become_pass: bool) -> list:
     try:
         env = dict(os.environ, ANSIBLE_RETRY_FILES_ENABLED="True", ANSIBLE_RETRY_FILES_SAVE_PATH=folder)
         with tempfile_inventory(tsensors.inventory_text(sensors)) as inventory:
-            if call(tsensors.distribute_command(inventory, become_pass), cwd=REPO_DIR, env=env) == 0:
+            if call(command(inventory), cwd=REPO_DIR, env=env) == 0:
                 return []
         try:
-            with open(os.path.join(folder, "sensor_cert.retry"), encoding="utf-8", errors="replace") as handle:
+            with open(os.path.join(folder, retry), encoding="utf-8", errors="replace") as handle:
                 names = set(handle.read().split())
         except OSError:
             names = set()
@@ -2356,7 +2635,7 @@ def run_install(classic: bool, *, sudo_nopasswd: bool = False, become_file: str 
                 user_password_file: str = "") -> int:
     from tpotctl import installer
     if not sys.platform.startswith("linux"):
-        raise ops.OpsError("tpot install installs T-Pot on Linux (Debian recommended), see the README")
+        raise ops.OpsError("tpot install installs T-Pot on Debian 13 (Raspberry Pi OS for T-Pot Mobile), see the README")
     if installer.installed():
         raise ops.OpsError("T-Pot is installed on this host already, update it with: tpot update")
     if classic:
@@ -2399,6 +2678,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 def dispatch(argv: List[str]) -> int:
     args = None
     try:
+        if argv and argv[0] == "migrate":
+            from tpotctl import migration_cli
+            return migration_cli.main(argv[1:])
         if argv and argv[0] in PASSTHROUGH:
             ops.require_linux_host(argv[0])
             return run_script(PASSTHROUGH[argv[0]], argv[1:])

@@ -50,7 +50,7 @@ class Rule:
     message: str = ""
     required: bool = False
     safe: bool = False
-    scope: str = ""
+    scope: List[str] = field(default_factory=list)
     services: List[str] = field(default_factory=list)
     default: str = ""
     on_invalid: str = ""
@@ -90,6 +90,8 @@ def load_schema(path: str = SCHEMA_PATH) -> Dict[str, Rule]:
     rules = {}
     for key, spec in (data.get("keys") or {}).items():
         spec = dict(spec or {})
+        if isinstance(spec.get("scope"), str):
+            spec["scope"] = [spec["scope"]]
         for name in ("values", "services"):
             spec[name] = [str(v) for v in spec.get(name) or []]
         for name in ("default",):
@@ -153,7 +155,7 @@ def compose_services(path: str) -> Set[str]:
 
 
 def applies(rule: Rule, values: Dict[str, str], services: Iterable[str]) -> bool:
-    if rule.scope and rule.scope != values.get("TPOT_TYPE", ""):
+    if rule.scope and values.get("TPOT_TYPE", "") not in rule.scope:
         return False
     if rule.services and not set(rule.services) & set(services):
         return False

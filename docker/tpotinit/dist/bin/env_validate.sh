@@ -158,7 +158,7 @@ fuENV_RULE() {
     local myWARN_EMPTY="${18}" myWW_KEY="${19}" myWW_VALUES="${20}" myWW_MESSAGE="${21}" myLEGACY="${22}"
     local myVALUE myWHEN myIFACE myENTRY myLISTED myDIGITS
     myVALUE="$(fuVAL "${myKEY}")"
-    [ -n "${mySCOPE}" ] && [ "${mySCOPE}" != "${TPOT_TYPE}" ] && return 0
+    [ -n "${mySCOPE}" ] && [[ ! "${TPOT_TYPE}" =~ ^(${mySCOPE})$ ]] && return 0
     # shellcheck disable=SC2086
     [ -n "${mySERVICES}" ] && ! fuCOMPOSE_HAS ${mySERVICES} && return 0
     if [ "${myREQUIRED}" == "true" ] && [ -z "${myVALUE}" ];
@@ -305,7 +305,7 @@ fuENV_VALIDATE() {
         .value.type // "text",
         (.value.required // false | tostring),
         (.value.safe // false | tostring),
-        .value.scope // "",
+        ([.value.scope // []] | flatten | join("|")),
         ((.value.services // []) | join(" ")),
         ((.value.values // []) | join(" ")),
         (.value.optional // false | tostring),

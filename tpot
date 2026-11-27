@@ -32,6 +32,9 @@ def run(argv):
         fail("The T-Pot Manager runs on Linux and macOS, not on Windows.")
     if os.geteuid() == 0:
         fail("do not run tpot as root, it calls sudo itself where needed")
+    if argv[:1] == ["migrate"]:
+        from tpotctl import migration_cli
+        sys.exit(migration_cli.main(argv[1:]))
     if (not argv and sys.platform.startswith("linux") and sys.stdin.isatty() and sys.stdout.isatty()
             and not os.environ.get("TPOT_TERMINAL_CHECKED") and not os.environ.get("TPOT_TERMINAL_ACTIVE")):
         try:

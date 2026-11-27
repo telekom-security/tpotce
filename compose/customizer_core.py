@@ -41,6 +41,7 @@ GROUPS = [
 GROUP_TITLES = dict(GROUPS)
 EDITION_ORDER = ["STANDARD", "SENSOR", "LLM", "MINI", "MOBILE", "TARPIT"]
 SENSOR_EDITION = "SENSOR"
+MOBILE_EXCLUDED = {"nginx", "kibana", "map_web", "map_data", "map_redis", "fluentbit"}
 # what ships the honeypot logs: Logstash on a HIVE, Fluent Bit on a SENSOR
 HIVE_SHIPPER = "logstash"
 SENSOR_SHIPPER = "fluentbit"
@@ -64,7 +65,7 @@ def sensor_base(base: str) -> bool:
 
 
 def role_of(base: str) -> str:
-    return "SENSOR" if sensor_base(base) else "HIVE"
+    return base if base in ("MOBILE", "SENSOR") else "HIVE"
 
 
 def edition_line(lines: List[str]) -> int:
@@ -213,6 +214,8 @@ class Catalog:
     def offered(self, base: str, name: str) -> bool:
         """Can the service be picked at all when starting from this base?"""
         if name not in self.catalog.services:
+            return False
+        if base == "MOBILE" and name in MOBILE_EXCLUDED:
             return False
         if name in self.editions[base].services:
             return True
@@ -1125,7 +1128,37 @@ def _not_carried(name: str, old: dict, new: dict) -> List[str]:
     return lost
 
 
-def adopt(catalog: Catalog, text: str, tpot_type: str = "HIVE", old_ports: Optional[OldPorts] = None) -> Adoption:
+def mobile_services(text: str, *, installing: bool = False) -> None:
+    """Check the input body too: an old header need not describe what actually runs."""
+    try:
+        data = load_text_ports(text)
+    except yaml.YAMLError as err:
+        raise CustomizerError(f"invalid Compose YAML: {err}") from err
+    services = data.get("services") if isinstance(data, dict) else None
+    if not isinstance(services, dict):
+        raise CustomizerError("MOBILE needs a Compose services mapping")
+    incompatible = MOBILE_EXCLUDED.intersection(services)
+    if incompatible:
+        raise CustomizerError(f"MOBILE has no Web UI, sensor receiver or shipper: remove {', '.join(sorted(incompatible))}")
+    if installing:
+        missing = {"tpotinit", "elasticsearch", "logstash"} - services.keys()
+        if missing:
+            raise CustomizerError(f"MOBILE needs the local pipeline: missing {', '.join(sorted(missing))}")
+    for name in ("logstash", "tpotinit"):
+        service = services.get(name, {})
+        if not isinstance(service, dict):
+            raise CustomizerError(f"MOBILE: {name} must be a mapping")
+        if name == "logstash" and service.get("ports"):
+            raise CustomizerError("MOBILE Logstash is local only: remove the published ports (sensor ingest 64305/64306)")
+        if name == "logstash" and any(k in service for k in ("command", "entrypoint", "extends")):
+            raise CustomizerError("MOBILE Logstash must start the image's local pipeline; remove the startup override")
+        role = _environment(service.get("environment")).get("TPOT_TYPE")
+        if role in ("SENSOR", "HIVE") or (installing and name == "logstash" and
+                role not in ("MOBILE", "${TPOT_TYPE}", "${TPOT_TYPE:-MOBILE}")):
+            raise CustomizerError(f"MOBILE: {name} needs TPOT_TYPE=MOBILE for the local pipeline")
+
+
+def adopt(catalog: Catalog, text: str, tpot_type: str = "", old_ports: Optional[OldPorts] = None) -> Adoption:
     """The selection of this release closest to a compose file of any origin, what it drops
     and what it does not carry. The base is the edition of the T-Pot type: STANDARD for a
     HIVE, SENSOR for a SENSOR. old_ports (old_catalog_ports) tells host ports of your own from
@@ -1139,7 +1172,12 @@ def adopt(catalog: Catalog, text: str, tpot_type: str = "HIVE", old_ports: Optio
     lines = text.split("\n")
     index = edition_line(lines)
     v1 = index >= 0 and lines[index].strip() == V1_EDITION_LINE
-    base = "SENSOR" if str(tpot_type).strip().upper() == "SENSOR" else "STANDARD"
+    role = tpot_type.strip().upper() or adopt_type(text)
+    base = {"HIVE": "STANDARD", "MOBILE": "MOBILE", "SENSOR": "SENSOR"}.get(role)
+    if not base:
+        raise CustomizerError(f"unknown T-Pot role: {role}")
+    if base == "MOBILE":
+        mobile_services(text)
     edition = catalog.editions[base]
 
     dropped: List[str] = []
@@ -1241,14 +1279,10 @@ def swap_shipper(selection: Selection, text: str) -> Tuple[Selection, List[Findi
 
 
 def adopt_type(text: str, env_type: str = "") -> str:
-    """HIVE or SENSOR for --adopt without --tpot-type: TPOT_TYPE of .env, else the edition of
-    the file (a SENSOR, or a customizer file built from SENSOR), else HIVE."""
-    if env_type.strip():
-        return "SENSOR" if env_type.strip().upper() == "SENSOR" else "HIVE"
+    """Preserve a Mobile base even on older installations whose default was HIVE."""
     selection = parse_header(text)
-    if edition_of(text.split("\n")) == "SENSOR" or (selection and sensor_base(selection.base)):
-        return "SENSOR"
-    return "HIVE"
+    base = selection.base if selection else edition_of(text.split("\n"))
+    return "MOBILE" if base == "MOBILE" else env_type.strip().upper() or role_of(base)
 
 
 def compose_check(path: str, repo_dir: str = REPO_DIR) -> Optional[str]:

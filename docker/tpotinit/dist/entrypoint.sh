@@ -169,6 +169,7 @@ write_passwd_file() {
 # $1 = the data folder (/data)
 create_web_users() {
     local myDATA="${1:-/data}" myKEEP="yes"
+    [[ "${TPOT_TYPE}" != MOBILE ]] || return 0
     echo
     echo "# Creating passwd files based on T-Pot .env config ..."
     # A HIVE without nginx (a custom selection) has nothing that reads them; a compose file that
@@ -184,6 +185,7 @@ create_web_users() {
       then
         myKEEP="no"
     fi
+    mkdir -p "${myDATA}/nginx/conf" || return 1
     write_passwd_file "${myDATA}/nginx/conf/nginxpasswd" "${WEB_USER}" web WEB_USER "tpot users import" "${myKEEP}" \
       && write_passwd_file "${myDATA}/nginx/conf/lswebpasswd" "${LS_WEB_USER}" sensor LS_WEB_USER "tpot sensors import" "${myKEEP}"
 }
@@ -282,7 +284,7 @@ myKERNEL=$(uname -a | grep -Eio "microsoft|linuxkit" | head -n 1)
 if [ -n "${myKERNEL}" ];
   then
     echo "# The kernel of this Docker is not that of a Linux host (${myKERNEL}): Docker Desktop or WSL2."
-    echo "# T-Pot runs on Docker Engine for Linux only (Debian recommended)."
+    echo "# T-Pot runs on Docker Engine on Debian 13 (Raspberry Pi OS for T-Pot Mobile) only."
     echo
     echo "# Aborting."
     echo
@@ -323,6 +325,7 @@ fi
 echo
 
 # Data folder management
+myFIRSTRUN=""
 if [ -f "/data/uuid" ];
   then
     figlet "Initializing ..."
@@ -346,12 +349,29 @@ if [ -f "/data/uuid" ];
     echo
     /opt/tpot/bin/clean.sh off
     echo
-    # The first import of the Kibana objects is pending until it worked (kibana_objects.sh), written
-    # before /data/uuid: a first start that ends before the import tries it again on the next one
-    if ! python3 /opt/tpot/bin/kibana_objects.py mark-fresh --data /data;
-      then
-        echo "# Warning: the first import of the Kibana objects could not be marked, the Kibana objects job of this start imports them without the advanced settings."
+    if [[ "${TPOT_TYPE}" == MOBILE ]]; then
+      # Remember a fresh Mobile install, not a pending Kibana import. A legacy HIVE
+      # without import records must not overwrite its own advanced settings.
+      mkdir -p /data/.mobile-first-start || exit 1
     fi
+    if ! create_web_users;
+      then
+        echo "# Aborting"
+        exit 1
+    fi
+fi
+
+if [[ "${TPOT_TYPE}" == HIVE ]] && fuCOMPOSE_HAS kibana &&
+   [[ -n "$myFIRSTRUN" || -d /data/.mobile-first-start ]]; then
+    if [[ -e /data/kibana_objects/pending ]] || python3 /opt/tpot/bin/kibana_objects.py mark-fresh --data /data; then
+      if [[ -d /data/.mobile-first-start ]]; then rmdir /data/.mobile-first-start || exit 1; fi
+    else
+      echo "# Warning: the first import of the Kibana objects could not be marked."
+    fi
+fi
+if [[ "${TPOT_TYPE}" == HIVE ]] && fuCOMPOSE_HAS nginx; then
+  if [[ ! -e /data/nginx/cert/nginx.key && ! -L /data/nginx/cert/nginx.key &&
+        ! -e /data/nginx/cert/nginx.crt && ! -L /data/nginx/cert/nginx.crt ]]; then
     echo
     echo "# Generating self signed certificate ..."
     echo
@@ -366,13 +386,13 @@ if [ -f "/data/uuid" ];
           -out "/data/nginx/cert/nginx.crt" \
           -days 3650 \
           -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' \
-          -addext "subjectAltName = IP:${myINTIP}"
-    echo
-    if ! create_web_users;
-      then
-        echo "# Aborting"
-        exit 1
-    fi
+          -addext "subjectAltName = IP:${myINTIP}" || exit 1
+  elif [[ ! -s /data/nginx/cert/nginx.key || ! -s /data/nginx/cert/nginx.crt ]]; then
+    echo "# Incomplete nginx key/certificate pair in /data/nginx/cert; restore the missing file." >&2
+    exit 1
+  fi
+fi
+if [[ -n "$myFIRSTRUN" ]]; then
     echo
     echo "# Final touches and permissions ..."
     echo
@@ -451,7 +471,7 @@ touch /tmp/success
 # The ILM policy tpot follows TPOT_ES_RETENTION, unless it was changed outside of T-Pot
 # (rules in its bin/es_retention.sh). In the background: Elasticsearch takes a while
 # and nothing else waits for it.
-if [ "${TPOT_TYPE}" == "HIVE" ] && yq -e '.services | has("elasticsearch")' "${COMPOSE}" >/dev/null 2>&1;
+if [[ "${TPOT_TYPE}" == HIVE || "${TPOT_TYPE}" == MOBILE ]] && yq -e '.services | has("elasticsearch")' "${COMPOSE}" >/dev/null 2>&1;
   then
     /opt/tpot/bin/es_retention.sh &
     myILM_PID=$!

@@ -119,12 +119,22 @@ EXCLUDED = (
     Exclusion(("SECURITY.md",), None, "the support policy (which releases get fixes) is decided at the release"),
     Exclusion(("update.sh",), r"^\s*#", "comments of update.sh are migration history (\"until ...\", Beelzebub note)"),
     Exclusion(("update.sh",), r"^myES_STEP_VERSION=", "Elasticsearch step version for old data"),
+    Exclusion(("update.sh",),
+              r'^\s*(?:if \[ "\$\{myINSTALLED\}" != "24\.04\.1"|elif \[ "\$\{myTARGET\}" != "24\.04\.2"|'
+              r'myWHY="(?:Debian 12 updates require an existing T-Pot 24\.04\.1 or 24\.04\.2 installation\.|'
+              r'Debian 12 is qualified only for the T-Pot 24\.04\.2 transition\.|'
+              r'T-Pot updates are supported on Debian 13; Debian 12 is allowed only for the qualified '
+              r'24\.04\.2 transition\.)")',
+              "the qualified Debian 12 T-Pot update transition"),
     Exclusion(("docker/deprecated/**/*",), None, "deprecated services are not built, their images exist only at the last tag"),
     Exclusion(("tpotctl/tests/**/*", "compose/tests/**/*", "docker/tpotinit/tests/**/*"), None,
               "test data, fixed so the tests do not change with a release"),
     Exclusion(("docker/**/*.ndjson",), None, "Kibana saved objects carry their own version fields"),
     Exclusion(("docker/cowrie/tests/**/*",), r"ubuntu\d+(\.\d+)*\.24\.04\.\d", "Ubuntu package versions of noble"),
     Exclusion(("tpotctl/sensors.py",), r"^SHIPPER_SINCE = ", "first release with Fluent Bit on SENSORs"),
+    Exclusion(("tpotctl/migration.py",), r"24\.04\.[12]", "supported T-Pot source releases for migration"),
+    Exclusion(("tpotctl/ops.py",), r"^DEBIAN_12_RELEASES, DEBIAN_12_TARGET = ",
+              "the qualified Debian 12 T-Pot update transition (update.sh fuCHECK_PLATFORM)"),
 )
 
 # the scripts and modules that must read the version (fuUI_VERSION, the file `version`)

@@ -22,6 +22,7 @@ The deployment itself stays installer/install/deploy.yml, run over SSH.
 """
 
 import base64
+import http.client
 import ipaddress
 import json
 import os
@@ -36,7 +37,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timedelta, timezone
 from stat import S_ISREG
 from typing import Callable, Dict, Iterable, Iterator, List, Optional, Tuple
@@ -101,6 +102,18 @@ class Heartbeat:
     ip_ext: str = ""
     ip_int: str = ""
     sequence: int = 0
+
+
+@dataclass
+class Probe:
+    """What tpotctl/sensor_probe.py reads on a SENSOR (probe_sensor)."""
+    version: str
+    os_id: str
+    hold: bool               # a migration holds T-Pot stopped there
+    update_locked: bool      # update.sh runs there
+    hive_ip: Optional[str]   # its TPOT_HIVE_IP, None without the line
+    services: List[str]      # of its compose file in use
+    role: Optional[str]      # its TPOT_TYPE, None without the line
 
 
 @dataclass
@@ -501,6 +514,103 @@ def runs_logstash(version: Optional[str]) -> bool:
     return bool(release) and release < _release(SHIPPER_SINCE)
 
 
+PROBE_TIMEOUT = 15
+# what a sensor says goes into the question and the output: only what its values can be
+PROBE_OS_ID = re.compile(r"[a-z0-9._-]{0,64}")
+PROBE_ROLE = re.compile(r"[A-Za-z]{0,64}")
+PROBE_SERVICE = re.compile(r"[A-Za-z0-9_.-]{1,64}")
+PROBE_SERVICES = 256
+
+
+def _plain(text: str, size: int) -> bool:
+    return len(text) <= size and all(" " <= char <= "~" for char in text)
+
+
+def _probe_answer(answer) -> bool:
+    if not isinstance(answer, dict) or set(answer) != {item.name for item in fields(Probe)}:
+        return False
+    if not (all(isinstance(answer[key], str) for key in ("version", "os_id"))
+            and all(isinstance(answer[key], bool) for key in ("hold", "update_locked"))
+            and all(answer[key] is None or isinstance(answer[key], str) for key in ("hive_ip", "role"))
+            and isinstance(answer["services"], list) and all(isinstance(name, str) for name in answer["services"])):
+        return False
+    return (bool(PROBE_OS_ID.fullmatch(answer["os_id"])) and _plain(answer["version"], 128)
+            and (answer["hive_ip"] is None or _plain(answer["hive_ip"], 253))
+            and (answer["role"] is None or bool(PROBE_ROLE.fullmatch(answer["role"])))
+            and len(answer["services"]) <= PROBE_SERVICES
+            and all(PROBE_SERVICE.fullmatch(name) for name in answer["services"]))
+
+
+def probe_sensor(sensor: Sensor, run: Callable = subprocess.run) -> Probe:
+    """What the sensor says of itself: tpotctl/sensor_probe.py over SSH to python3 - on its stdin. Its last line
+    is the answer (a login file of the sensor may print before it)."""
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "sensor_probe.py"), encoding="utf-8") as handle:
+        source = handle.read()
+    command = ssh_command(sensor.host, sensor.ssh_user, "python3", "-", port=sensor.ssh_port)
+    try:
+        proc = run(command, input=source, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
+                   timeout=PROBE_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise SensorsError(f"{sensor.name} cannot be checked (no answer within {PROBE_TIMEOUT} s)") from None
+    except (OSError, UnicodeError) as err:
+        raise SensorsError(f"{sensor.name} cannot be checked ({err})") from err
+    if proc.returncode:
+        last = (proc.stderr or "").strip().splitlines()[-1:]
+        said = "".join(char for char in (last[0] if last else "") if char.isprintable()).strip()[:200]
+        raise SensorsError(f"{sensor.name} cannot be checked ({said or f'exit code {proc.returncode}'})")
+    lines = [line for line in (proc.stdout or "").splitlines() if line.strip()]
+    try:
+        answer = json.loads(lines[-1]) if lines else None
+    except ValueError:
+        answer = None
+    if not _probe_answer(answer):
+        raise SensorsError(f"{sensor.name} cannot be checked (tpotctl/sensor_probe.py gave no valid answer)")
+    return Probe(**answer)
+
+
+def check_kind(probe: Probe) -> str:
+    """How the HIVE learns that the sensor took a new address: heartbeat (its Fluent Bit), refused (Logstash
+    of a release before SHIPPER_SINCE, the HIVE records the refusal of its events), logstash (a newer release
+    whose compose file still names logstash: nothing of it reaches the HIVE), none (no shipper)."""
+    if "fluentbit" in probe.services:
+        return "heartbeat"
+    if "logstash" in probe.services:
+        return "refused" if runs_logstash(probe.version) else "logstash"
+    return "none"
+
+
+def hive_skip_reason(probe: Probe, name: str) -> str:
+    """Why tpot sensors hive-address leaves the sensor as it is, "" when it sets the new address there."""
+    if not VERSION_TAG.fullmatch(probe.version):
+        return f"{name}: ~/tpotce/version cannot be read, it is no T-Pot sensor of a known release"
+    # a host of the registry may be a HIVE (this one): a restart there would stop its Elasticsearch
+    if probe.role is None:
+        return f"{name} has no TPOT_TYPE in ~/tpotce/.env, it is no T-Pot sensor, its T-Pot is not restarted"
+    if probe.role != "SENSOR":
+        return f"{name} is no SENSOR (TPOT_TYPE={probe.role}), its T-Pot is not restarted"
+    if probe.os_id != "debian":
+        return (f"{name} runs on {probe.os_id or 'an unknown system'}: T-Pot supports only Debian, move it to a "
+                f"fresh Debian host (tpot migrate) or add a new one (tpot sensors add)")
+    if probe.hold:
+        return f"{name} is held stopped by a migration, try again after the migration"
+    if probe.update_locked:
+        return f"{name}: an update runs there, try again after it"
+    return ""
+
+
+def confirmed(kind: str, name: str, heartbeats: Dict[str, Heartbeat], refused: Dict[str, float], since: float,
+              started_before: str) -> bool:
+    """The HIVE heard of the sensor at its new address since (the time on this HIVE when the play ended): a
+    heartbeat of a Fluent Bit that started anew (one it buffered before the restart still names the start of
+    before), or a refusal of its Logstash. Both times are the HIVE's receipt, so the sensor's clock counts not."""
+    if kind == "heartbeat":
+        beat = heartbeats.get(name)
+        return beat is not None and beat.received_at >= since and beat.started_at != started_before
+    if kind == "refused":
+        return name in refused and refused[name] >= since
+    return False
+
+
 def copy_id_command(host: str, user: str, port: int = SSH_PORT) -> List[str]:
     return ["ssh-copy-id", "-p", str(check_port(port)), f"{check_user(user)}@{check_address(host)}"]
 
@@ -532,6 +642,13 @@ def deploy_env(hive_user_value: str, hive_address: str, repo_dir: str = REPO_DIR
 def distribute_command(inventory: str, become_pass: bool = True, repo_dir: str = REPO_DIR) -> List[str]:
     command = ["ansible-playbook", os.path.join(repo_dir, "installer", "install", "sensor_cert.yml"), "-i", inventory,
                "-e", f"tpot_shipper_since={SHIPPER_SINCE}"]
+    return command + (["--ask-become-pass"] if become_pass else [])
+
+
+def hive_address_command(inventory: str, address: str, become_pass: bool = True,
+                         repo_dir: str = REPO_DIR) -> List[str]:
+    command = ["ansible-playbook", os.path.join(repo_dir, "installer", "install", "sensor_hive.yml"), "-i", inventory,
+               "-e", f"tpot_hive_address={check_hive_address(address)}"]
     return command + (["--ask-become-pass"] if become_pass else [])
 
 
@@ -920,6 +1037,15 @@ def _heartbeats(url: str, opener: Callable) -> Tuple[Dict[str, Heartbeat], Dict[
         if after != [page[-1]["_id"]] or (query.get("search_after") and after <= query["search_after"]):
             raise ValueError("invalid heartbeat pagination")
         query["search_after"] = after
+
+
+def fetch_heartbeats(url: str = ES_URL,
+                     opener: Callable = urllib.request.urlopen) -> Tuple[Dict[str, Heartbeat], Dict[str, float]]:
+    """The heartbeats and the refusals of the old format per sensor (the status index alone)."""
+    try:
+        return _heartbeats(url, opener)
+    except (OSError, ValueError, http.client.HTTPException) as err:
+        raise SensorsError(f"Sensor heartbeats on {url} cannot be asked ({err})") from err
 
 
 def fetch_status(days: int = 7, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Status:

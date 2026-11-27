@@ -334,11 +334,7 @@ class DeployAddressTest(Harness):
 
 
 class DeployDistributionTest(Harness):
-    """N2: the HIVE runs on the distributions install.sh supports, the message names them all."""
-
-    def test_the_distributions_are_the_ones_of_install_sh(self):
-        self.assertEqual(array("deploy.sh", "mySUPPORTED_DISTRIBUTIONS"),
-                         array("install.sh", "mySUPPORTED_DISTRIBUTIONS"))
+    """Deploy configures an already-installed sensor; it is not a new T-Pot installation."""
 
     def test_red_hat_enterprise_linux_is_supported(self):
         self.os_release("Red Hat Enterprise Linux")
@@ -350,26 +346,8 @@ class DeployDistributionTest(Harness):
         result = self.deploy()
         self.assertEqual(result.returncode, 1)
         self.assertNotIn("ansible-playbook", self.calls())
-        for name in array("install.sh", "mySUPPORTED_DISTRIBUTIONS"):
+        for name in array("deploy.sh", "mySUPPORTED_DISTRIBUTIONS"):
             self.assertIn(name, result.stderr)
-
-    def test_the_same_sentence_as_install_and_uninstall(self):
-        """RA10: deploy.sh, install.sh and uninstall.sh name the distributions in one sentence, "..., Rocky
-        Linux and Ubuntu.", for an unsupported one (Gentoo)."""
-        names = array("install.sh", "mySUPPORTED_DISTRIBUTIONS")
-        sentence = f"Only the following distributions are supported: {', '.join(names[:-1])} and {names[-1]}."
-        self.os_release("Gentoo")
-        write(os.path.join(self.bin, "uname"), base.UNAME, 0o755)
-        for script in ("install.sh", "uninstall.sh"):
-            write(os.path.join(self.tpotce, script), base.read(script), 0o755)
-        runs = {"deploy.sh": self.deploy(),
-                "install.sh": self.run_with(os.path.join(self.tpotce, "install.sh"), (), "-s", "-t", "s"),
-                "uninstall.sh": self.run_with(os.path.join(self.tpotce, "uninstall.sh"), (), "-y")}
-        for script, result in runs.items():
-            with self.subTest(script=script):
-                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-                self.assertIn(f"### [ERROR] - {sentence}", result.stdout + result.stderr)
-
 
 class DeployCredentialsTest(Harness):
     """N3: no htpasswd hash in the output, neither the new one nor the ones of other sensors; the

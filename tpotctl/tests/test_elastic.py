@@ -301,9 +301,9 @@ class WiringTest(unittest.TestCase):
     # an if block of entrypoint.sh: its condition, its body, up to its own fi
     IF_BLOCK = re.compile(r"^if (?P<cond>[^\n]*);\n\s*then\n(?P<body>(?:(?!fi\n)[^\n]*\n)*?)fi$", re.M)
 
-    def test_tpotinit_applies_the_rule_on_a_hive_with_elasticsearch(self):
+    def test_tpotinit_applies_the_rule_on_a_local_elastic_role(self):
         """After touch /tmp/success (the healthcheck: the honeypots start meanwhile): one if block that
-        only on a HIVE whose compose file has elasticsearch starts es_retention.sh in the background,
+        only on a HIVE or MOBILE whose compose file has elasticsearch starts es_retention.sh in the background,
         before the Kibana objects (which wait for Kibana and must not hold it up)."""
         text = self.read("docker", "tpotinit", "dist", "entrypoint.sh")
         start = text.index("touch /tmp/success\n")
@@ -314,8 +314,11 @@ class WiringTest(unittest.TestCase):
         self.assertEqual(len(blocks), 1, blocks)
         block = blocks[0]
         # the guard: both tests, joined by &&, nothing else (spaces and the quoting of the yq expression aside)
-        self.assertNotIn("||", block.group("cond"))
-        self.assertEqual(self.guard(block.group("cond")), self.GUARD)
+        role, service = self.guard(block.group("cond"))
+        self.assertEqual(service, self.GUARD[1])
+        for kind in ("HIVE", "MOBILE", "SENSOR", "UNKNOWN"):
+            rc = subprocess.run(["bash", "-c", role], env={"TPOT_TYPE": kind}).returncode
+            self.assertEqual(rc == 0, kind in ("HIVE", "MOBILE"))
         # the body: the call alone, in the background, and its PID for the cleanup on SIGTERM
         body = [line.strip() for line in block.group("body").splitlines() if line.strip()]
         self.assertEqual(body, ["/opt/tpot/bin/es_retention.sh &", "myILM_PID=$!"])
@@ -542,6 +545,14 @@ class RetentionRetryTest(RetentionRun):
         self.assertEqual(calls.count("put-done"), 2, calls)          # both policies
         self.assertIn("# Index template logstash: written (T-Pot test-release).", out)
         self.assertNotIn("in place after", out)
+
+    def test_mobile_applies_only_local_retention_and_templates(self):
+        rc, calls, out, _ = self.finish(15, TPOT_TYPE="MOBILE", TPOT_SENSOR_STATUS_RETENTION="7")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(calls.count("put-done"), 1)
+        self.assertIn("logstash: written (T-Pot test-release)", out)
+        self.assertIn("tpot-failures: kept", out)
+        self.assertNotIn("tpot-sensor", out)
 
     def test_retries_the_templates(self):
         rc, calls, out, template = self.finish(30, TEMPLATE_FAILS="1", TPOT_ES_TEMPLATE_RETRY="1")

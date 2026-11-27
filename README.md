@@ -7,9 +7,9 @@ T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeyp
 
 # TL;DR
 1. Meet the [system requirements](#system-requirements). The T-Pot installation needs at least 8-16 GB RAM, 128 GB free disk space as well as a working (outgoing non-filtered) internet connection.
-2. [Download](#choose-your-distro) or prepare a dedicated Debian 13 host or VM (preferred). [Raspberry Pi OS](#raspberry-pi-4-8gb-support) remains supported for T-Pot Mobile; other listed Linux distributions are best effort.
+2. [Download](#choose-your-distro) or prepare a dedicated Debian 13 host or VM. [Raspberry Pi OS](#raspberry-pi-4-8gb-support) is supported for T-Pot Mobile only.
 3. Install the ISO with as minimal packages / services as possible (`ssh` required)
-4. Install `curl`: `$ sudo [apt, dnf, zypper] install curl` if not installed already
+4. On Debian, install `curl` if it is not already present: `$ sudo apt install curl`
 5. Run installer as non-root from `$HOME`:
 ```
 env bash -c '
@@ -54,12 +54,12 @@ env bash -c '
 - [Installation](#installation)
   - [Choose your distro](#choose-your-distro)
   - [Raspberry Pi 4 (8GB) Support](#raspberry-pi-4-8gb-support)
+  - [Migrating to a Supported Debian Host](#migrating-to-a-supported-debian-host)
   - [T-Pot ISO (preview)](#t-pot-iso-preview)
   - [Get and install T-Pot](#get-and-install-t-pot)
   - [Unattended Installation](#unattended-installation)
   - [Testing a Branch](#testing-a-branch)
   - [macOS \& Windows](#macos--windows)
-  - [Red Hat Enterprise Linux](#red-hat-enterprise-linux)
   - [Installation Types](#installation-types)
     - [Standard / Hive](#standard--hive)
     - [Distributed](#distributed)
@@ -140,7 +140,7 @@ env bash -c '
 <br><br>
 
 # Technical Concept
-T-Pot's main components live in the `tpotinit` Docker image. Debian is the preferred host platform, Raspberry Pi OS remains supported for T-Pot Mobile, and other listed Linux distributions are best effort (see [host support tiers](#choose-your-distro)). Containers depend on the host kernel and networking, so T-Pot runs on Linux only (no Docker Desktop, no WSL2, see [macOS & Windows](#macos--windows)). T-Pot uses [docker](https://www.docker.com/) and [docker compose](https://docs.docker.com/compose/) to reach its goal of running as many honeypots and tools as possible simultaneously and thus utilizing the host's hardware to its maximum.
+T-Pot's main components live in the `tpotinit` Docker image. From 24.04.2, Debian 13 is the only supported general-purpose host platform; Raspberry Pi OS Lite 64-bit is supported for T-Pot Mobile only (see [host support](#choose-your-distro)). Containers depend on the host kernel and networking, so T-Pot runs on Linux only (no Docker Desktop, no WSL2, see [macOS & Windows](#macos--windows)). T-Pot uses [docker](https://www.docker.com/) and [docker compose](https://docs.docker.com/compose/) to reach its goal of running as many honeypots and tools as possible simultaneously and thus utilizing the host's hardware to its maximum.
 <br><br>
 
 ## Honeypots and Tools
@@ -235,7 +235,7 @@ During the installation and during the usage of T-Pot there are two different ty
 
 # System Requirements
 
-Use a dedicated host or VM, preferably Debian 13, without unrelated production services. T-Pot changes host networking, firewall settings and packages. Depending on the [listed Linux distro images and their support tiers](#choose-your-distro), hive / sensor, installing on [real hardware](#running-on-hardware), in a [virtual machine](#running-in-a-vm) or other environments there are different requirements regarding OS, RAM, storage and network. Adjusting `~/tpotce/docker-compose.yml` and `~/tpotce/.env` does not replace the host requirements.
+Use a dedicated Debian 13 host or VM without unrelated production services. T-Pot changes host networking, firewall settings and packages. Depending on the hive / sensor role, installing on [real hardware](#running-on-hardware), in a [virtual machine](#running-in-a-vm) or other environments there are different requirements regarding RAM, storage and network. Raspberry Pi OS Lite 64-bit is supported for T-Pot Mobile only. Adjusting `~/tpotce/docker-compose.yml` and `~/tpotce/.env` does not replace the host requirements.
 <br><br>
 
 | T-Pot Type | RAM  | Storage   | Description                                                                                      |
@@ -250,11 +250,11 @@ T-Pot does require ...
 - a working, non-proxied, internet connection
 ... for a successful installation and operation.
 <br><br>
-*If you need proxy support or otherwise non-standard features, you should check the docs of the [listed Linux distributions](#choose-your-distro) and / or the [Docker documentation](https://docs.docker.com/).*
+*If you need proxy support or otherwise non-standard features, check the Debian and / or [Docker documentation](https://docs.docker.com/).*
 <br><br>
 
 ## Running in a VM
-A dedicated Debian VM is the preferred virtualized deployment. Booting a [listed Linux distribution](#choose-your-distro) in a VM alone does not verify T-Pot's host kernel and network requirements. The following hypervisors were tested / reported to work:
+Run T-Pot in a dedicated [Debian 13](#choose-your-distro) VM. Booting Debian in a VM alone does not verify T-Pot's host kernel and network requirements. The following hypervisors were tested / reported to work:
 * [UTM (Intel & Apple Silicon)](https://mac.getutm.app/)
 * [VirtualBox](https://www.virtualbox.org/)
 * [VMWare Fusion](https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion) and [VMWare Workstation](https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion)
@@ -267,7 +267,7 @@ A dedicated Debian VM is the preferred virtualized deployment. Booting a [listed
 <br><br>
 
 ## Running on Hardware
-Check the hardware compatibility list of the [chosen Linux distribution](#choose-your-distro), preferably Debian, and test T-Pot's kernel, firewall, NIC and storage requirements before investing in dedicated hardware. OS hardware support alone is not enough to verify honeypot operation.
+Check the hardware compatibility of [Debian 13](#choose-your-distro) (Raspberry Pi OS for T-Pot Mobile) and test T-Pot's kernel, firewall, NIC and storage requirements before investing in dedicated hardware. OS hardware support alone is not enough to verify honeypot operation.
 <br><br>
 
 ## Running in a Cloud
@@ -497,35 +497,29 @@ Once you are familiar with how things work you should choose a network you suspe
 <br><br>
 
 # Installation
-[Download](#choose-your-distro) Debian 13 (preferred), follow the [TL;DR](#tldr) instructions or `git clone` the T-Pot repository and run the installer `~/tpotce/install.sh`. A clean, dedicated host or VM is recommended; an already prepared host must meet the same requirements and be dedicated to T-Pot. Raspberry Pi OS uses the same installer for T-Pot Mobile. The T-Pot installer will require direct access to the internet as described [here](#required-ports).
+[Download](#choose-your-distro) Debian 13, follow the [TL;DR](#tldr) instructions or `git clone` the T-Pot repository and run the installer `~/tpotce/install.sh`. A clean, dedicated host or VM is recommended; an already prepared host must meet the same requirements and be dedicated to T-Pot. Raspberry Pi OS Lite (64-bit) uses the same installer for T-Pot Mobile only. The T-Pot installer will require direct access to the internet as described [here](#required-ports).
 <br><br>
 
 ## Choose your distro
 
-Starting with T-Pot 24.04.2, the host support tiers are:
+Starting with T-Pot 24.04.2, the only supported hosts are:
 
-- **Preferred: Debian 13**, on x86-64 or arm64. It is recommended for new deployments and is the reference platform for host compatibility testing and distribution-specific fixes.
-- **Supported: Raspberry Pi OS Lite (64-bit, Debian 13 / Trixie)** for T-Pot Mobile. It is not part of the best-effort group.
-- **Best effort: AlmaLinux, Fedora, openSUSE Tumbleweed, Red Hat Enterprise Linux, Rocky Linux and Ubuntu**, at the versions listed below. Their installation paths remain available, but there is no equal test coverage or commitment to fix distribution-specific problems. Both the installer and the T-Pot Manager display a warning, not a new installation block.
+- **Debian GNU/Linux 13**, on x86-64 or arm64, for T-Pot editions.
+- **Raspberry Pi OS Lite (64-bit, Debian 13 / Trixie)** for the built-in T-Pot Mobile edition only.
 
-The version checks still apply to every tier; best effort does not make an unlisted distribution or OS version acceptable to the installer. Every tier needs a **64-bit** system (x86-64 or arm64, 64-bit userland), the images of T-Pot are amd64 and arm64 only: the installer stops on a 32-bit system, also on a 32-bit Raspberry Pi OS that boots a 64-bit kernel. Whether the 27.04 release removes other Linux distribution paths is **not decided**. No such support cut is made here. A [T-Pot ISO](#t-pot-iso-preview) based on Debian's netinst is available as a preview to build from source, not as a released download. Guided cross-host migration is planned, not an available migration path yet.
+Other operating systems are unsupported from 24.04.2; the installer and updater reject them. An existing T-Pot 24.04.1 installation on Debian can be updated normally. Debian 12 (Bookworm, Raspberry Pi OS Bookworm included) only takes the update to 24.04.2 as a transition; later releases need Debian 13, the way there is the [migration package](#migrating-to-a-supported-debian-host) to a fresh Debian 13 host (Raspberry Pi OS Lite 64-bit / Trixie for T-Pot Mobile). For an existing installation on another operating system, use the [migration package](#migrating-to-a-supported-debian-host) to move supported configuration and identity, optionally with the complete Elasticsearch history and Kibana objects, to a fresh Debian 13 host. Every supported host needs a **64-bit** userland (x86-64 or arm64); a 64-bit kernel does not make a 32-bit Raspberry Pi OS supported. A [T-Pot ISO](#t-pot-iso-preview) based on Debian's netinst is available as a preview to build from source, not as a released download.
 
 **Steps to Follow:**
 
-1. Download Debian 13 (preferred), or a distribution at the required version below. The installer rejects other versions; openSUSE Tumbleweed is rolling. Red Hat Enterprise Linux 10 is best effort and omitted from the download table due to its subscription-based nature; see [Red Hat Enterprise Linux](#red-hat-enterprise-linux).
+1. Download Debian 13 for a server or VM, or Raspberry Pi OS Lite 64-bit / Trixie for T-Pot Mobile.
 2. During installation choose a **minimum**, **netinstall** or **server** version that will only install essential packages.
 3. **Never** install a graphical desktop environment such as Gnome or KDE. T-Pot will fail to work with it due to port conflicts. 
 4. Make sure to install SSH, so you can connect to the machine remotely.
 
 
-| Distribution Name                                                                  | x64                                                                                                                                   | arm64                                                                                                                                   |
-|:-----------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------|
-| [**Debian 13 Network Install (preferred)**](https://www.debian.org/CD/netinst/index.en.html) | [images](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/) | [images](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/) |
-| [Alma Linux OS 10.x Minimal ISO](https://almalinux.org)                               | [download](https://repo.almalinux.org/almalinux/10/isos/x86_64/AlmaLinux-10-latest-x86_64-minimal.iso)                                 | [download](https://repo.almalinux.org/almalinux/10/isos/aarch64/AlmaLinux-10-latest-aarch64-minimal.iso)                                 |
-| [Fedora Server 44 Network Install](https://fedoraproject.org/server/download)      | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/x86_64/iso/Fedora-Server-netinst-x86_64-44-1.7.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/aarch64/iso/Fedora-Server-netinst-aarch64-44-1.7.iso) |
-| [OpenSuse Tumbleweed Network Image](https://get.opensuse.org/tumbleweed/#download) | [download](https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-NET-x86_64-Current.iso)                                   | [download](https://download.opensuse.org/ports/aarch64/tumbleweed/iso/openSUSE-Tumbleweed-NET-aarch64-Current.iso)                      |
-| [Rocky Linux OS 10.x Minimal ISO](https://rockylinux.org/download)                    | [download](https://download.rockylinux.org/pub/rocky/10/isos/x86_64/Rocky-10-latest-x86_64-minimal.iso)                               | [download](https://download.rockylinux.org/pub/rocky/10/isos/aarch64/Rocky-10-latest-aarch64-minimal.iso)                               |
-| [Ubuntu 26.04 Live Server](https://ubuntu.com/download/server)                     | [download](https://releases.ubuntu.com/26.04/ubuntu-26.04-live-server-amd64.iso)                                                     | [download](https://cdimage.ubuntu.com/releases/26.04/release/ubuntu-26.04-live-server-arm64.iso)                                        |
+| Distribution Name | x64 | arm64 |
+|:-------------------|:----|:------|
+| [**Debian 13 Network Install**](https://www.debian.org/CD/netinst/index.en.html) | [images](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/) | [images](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/) |
 
 <br>
 
@@ -541,9 +535,220 @@ The Mobile edition includes Honeytrap, so the Pi kernel must provide its NFQUEUE
 
 <br>
 
+## Migrating to a Supported Debian Host
+
+Updates from T-Pot 24.04.1 continue normally on Debian. An existing T-Pot installation on a
+non-Debian host is not updated in place by 24.04.2. Install a fresh Debian 13 host with the same
+CPU architecture (Raspberry Pi OS Lite 64-bit / Trixie for a Mobile source), then move the
+installation with the migration tools. There are two scopes:
+
+|        | Configuration only | Complete history (`--history`) |
+|:-------|:-------------------|:-------------------------------|
+| Moves  | `.env` settings, the active Compose selection, access and identity files (web users, sensor access, TLS keys) | the same, plus the Elasticsearch events (`logstash-*`, `tpot-sensor-heartbeat-*`, `tpot-sensor-status`), the Kibana saved objects and the advanced settings of every space |
+| Source | keeps running | is stopped for the export and stays stopped, also across a reboot |
+| Target | starts with an empty Elasticsearch | restores and verifies the history before T-Pot starts for the first time |
+
+The export always runs on the **old source**, the import always on the **fresh target** before
+T-Pot ever ran there. The migration tools require Python 3.9 or later and Docker access; they do
+not require installing the T-Pot Manager's virtual environment on the old source.
+
+### When `update.sh` refuses the host
+
+Do not run `update.sh` on a host 24.04.2 does not support. The updater of the installed release runs
+first: it stops T-Pot, writes its backup and pulls 24.04.2 before any new code runs, and only then
+does 24.04.2 refuse the host. On its way, the updater of 24.04.1 (the tag and the later master
+checkouts) stops **all** containers of the host and removes the stopped containers, dangling images
+and unused volumes (`docker container prune`, `image prune`, `volume prune`; with Docker 23 and
+later only anonymous volumes), those of other projects too. This cannot be undone. The tagged images
+of 24.04.1 stay.
+
+After the refusal, `update.sh` puts the checkout, `.env` and `docker-compose.yml` back to the release
+before: with the `rollback.txt` of its backup archive (`restore.sh -c`), or, for the tgz backup the
+24.04.1 tag and early master checkouts write, with the commit before their `git pull` in the reflog
+of `~/tpotce`. It then starts T-Pot again where `tpot.service` is enabled or `-s` was given, and
+still exits with 1. Where it cannot name the release before for certain (an emptied reflog, a
+checkout of another branch, another version in the backup), it changes nothing more: T-Pot stays
+stopped and the summary names the commands for the way back by hand (`git reset --hard`, then
+`chmod 600 ~/tpotce/.env` before `.env` and `docker-compose.yml` are written back). Should the
+reset or the writing back fail, `update.sh` keeps a private copy of both files in
+`~/tpot_rollback.*` and names it. On the source of a history export, the checkout goes back as
+well, but T-Pot stays stopped; `tpot migrate resume-source` in the tools checkout you exported with
+starts it again (then export anew). Without a safe way back, take the way back by hand first and
+only then run `resume-source`; it refuses the checkout of 24.04.2.
+
+Running `update.sh` again repeats the stop, the backup, the refusal and the way back. The tgz
+updaters write a full tgz of `~/tpotce`, including `data/`, into your home directory every time:
+watch the free space and remove the extra tgz files. `tpot migrate inspect` and
+`export` refuse a checkout whose `.env` names another `TPOT_VERSION` than its file `version`, the
+state an interrupted update leaves: go back to the release before first, then export.
+
+### 1. Export on the source
+
+Use a separate 24.04.2 tools checkout. Do not replace or update the installed source checkout in
+`~/tpotce`; the export reads it and leaves it unchanged.
+
+```bash
+git clone https://github.com/telekom-security/tpotce ~/tpot-migration-tools
+cd ~/tpot-migration-tools
+./tpot migrate inspect --source ~/tpotce
+# configuration only, the source keeps running:
+./tpot migrate export --source ~/tpotce --output ~/tpot-migration.tar
+# or the complete history, while the source T-Pot runs; this stops it:
+./tpot migrate export --source ~/tpotce --output ~/tpot-history.tar --history
+# If source sudo needs a password, add -B /path/to/private-password-file
+# (--history refuses to start without it, a cached sudo login expires mid-export).
+```
+
+The *Update & backup* page of the T-Pot Manager, also started from the tools checkout
+(`./tpot`), says why `update.sh` would refuse this host, or that a migration holds it, and offers
+the same: *Export for a migration ...* writes `~/tpot-migration.tar`, or, on a HIVE after a
+question, `~/tpot-history.tar` with the history; *Resume the source* appears while a history
+export holds this T-Pot stopped. `inspect`, `validate` and `import` stay on the command line.
+
+`--history` plans a maintenance window: it requires confirmation (`-y` for an unattended run),
+checks the actual source images, versions and Elasticsearch data mount while the source runs,
+then installs a persistent start guard and stops the source. Do not run other administrative
+operations or manually start its containers during this window. The daily reboot of T-Pot
+24.04.1 does not know this guard and reboots between 00:00 and 04:59: start the export well
+outside that time, or disable its line `T-Pot Daily Reboot` with `sudo crontab -e` for the
+export. After an interrupting reboot the guard keeps the source stopped and repeating the
+command resumes. Only isolated maintenance
+containers run, with no published ports or external networking. ILM remains paused while a
+complete snapshot, exact event counts, time ranges, document samples and Kibana objects from every
+space are recorded, including each space's active advanced settings. Other application indices
+are not included. A SENSOR without Elasticsearch has no local history: export that history on its
+HIVE.
+
+The history package contains the configuration and identity files, the snapshot repository and
+its acceptance inventory, not a copy of the live Elasticsearch data directory. On the source,
+allow room for the repository, its inner archive and the final package, plus 512 MiB reserve when
+they share a filesystem. External Elasticsearch configuration mounts require separate
+qualification; they are never silently dropped. The acceptance inventory is limited to 128 MiB;
+exceeding that limit stops the export instead of dropping samples or objects. The snapshot
+repository itself has no such size limit. Earlier draft history inventories (schema 1), which could
+omit the advanced settings, require a new final export; they are not accepted as complete
+inventories.
+
+The source stays stopped after success. While its start guard is there, `update.sh` refuses to
+update it (and `--check-data-loss`), so the source stays the one the export inventoried;
+`update.sh --backup-only` still writes a backup and leaves T-Pot stopped, also with `-s`.
+Repeating the same command resumes packaging from a verified checkpoint; a failed snapshot attempt is retried in a new private repository, after
+the repository, files and archives of the earlier failed attempts were removed from the private
+migration state. Partial snapshots are not published as successful packages.
+
+Every package is unencrypted. It contains `.env`, the active Compose file and selected access and
+identity files, including password hashes and TLS private keys. Transfer it over a trusted,
+protected channel, treat it as a secret and remove extra copies after the migration.
+
+### 2. Import on the fresh target
+
+Prepare the target as a regular user with sudo and get the 24.04.2 checkout, but do **not** run the
+normal installer first: the import refuses a host where T-Pot is installed, `~/tpotce/.env` or
+`~/tpotce/docker-compose.yml` exists or the data folder exists.
+
+```bash
+sudo apt install git
+git clone https://github.com/telekom-security/tpotce ~/tpotce
+cd ~/tpotce
+./tpot migrate validate ~/tpot-history.tar
+./tpot migrate import ~/tpot-history.tar
+./install.sh --migration
+```
+
+`import` requires confirmation before staging a private copy of the package; the checkout stays
+unchanged. `install.sh --migration` shows the target-side report and asks again before applying
+anything. For an unattended run, use `tpot migrate import --yes FILE` and
+`./install.sh --migration --migration-yes -s` only when the package and report have already been
+reviewed.
+
+The importer preserves the target's T-Pot version, repository, data path and Compose path. It
+adapts HIVE/SENSOR Compose through the target release's customizer; Mobile uses the target's
+built-in Mobile Compose, so hand-edited Mobile Compose changes are not transferred. Settings
+unsupported by the target edition or schema are listed in the report. A configuration-only package
+brings no Elasticsearch history, honeypot logs or the rest of `data/`. Failed installations retain
+the private package for retry; successful installation removes the staged package.
+
+With a history package, the report also names the indices, events, their time range, the Kibana
+objects and spaces, the Elasticsearch upgrade route and the target retention. Before the report,
+the installer checks the room it needs: the private staging in `~/.local/share/tpotce/migration`
+needs about twice the size of the snapshot repository (four times with an intermediate version),
+the data folder once that size, plus 512 MiB reserve on each filesystem, in addition to the staged
+package. After the confirmation:
+
+1. A start guard keeps `tpot.service` from starting during the playbook, the image pull and any
+   reboot until the history is verified.
+2. All images are pulled; a failed pull stops here because the restore runs the target's images.
+3. In isolated maintenance containers (internal network, no published ports) the snapshot is
+   restored into the target data folder and upgraded where needed (see the routes below).
+4. Event counts and time ranges per index, document samples and the Kibana objects and advanced
+   settings of every space are compared with the source inventory. Only an exact match releases
+   `tpot.service`; T-Pot then starts after the reboot the installer asks for.
+
+On a failure or Ctrl+C, T-Pot stays held and the package stays staged: fix the cause and run
+`./install.sh --migration` again, it resumes (`update.sh` refuses to run while the guard is
+there). If only the sudo mode fails after the release, run it again before you reboot: once
+T-Pot has started, the retry can no longer finish the migration. A small private journal remains
+in `~/.local/share/tpotce/migration` after success, so a repeated run does not restore twice. Never
+copy Elasticsearch's live data directory to the new host instead; only the verified snapshot route
+is supported.
+
+**Elasticsearch upgrade routes.** A source on Elasticsearch 8.19 or later (the published 24.04.1
+images can already ship 9.x) is restored directly into the target's version. A source before 8.19
+with Kibana first passes through the 8.19 version pinned in the target's `update.sh`, in another
+maintenance container, so Kibana can migrate its objects. Indices created before Elasticsearch 8
+need a separately qualified reindex and are refused, as is a source newer than the target.
+
+**After the migration.** The web users and sensor accounts of the source are kept. Sensors send to
+the address in their `TPOT_HIVE_IP` and check the HIVE against its certificate, so a migrated HIVE
+should take over the address of the old one (see [Planning and Certificates](#planning-and-certificates)).
+With a new address, `tpot sensors hive-address` sets it on the sensors, see
+[Changing the HIVE address](#changing-the-hive-address).
+The restore keeps each index's creation date on the source, which is what ILM measures the retention
+from. If an index is already older than the target retention (`TPOT_ES_RETENTION`, shown in the
+report) at the first start, T-Pot keeps all events until you apply it with
+`tpot elastic retention --force` or on the *Elastic* page (both ask first; `--sensor-history` for
+the sensor history); see [Log Persistence](#log-persistence). The restored
+Kibana objects stay as they are: unless the source chose a `TPOT_KIBANA_OBJECTS` mode, the target
+gets `keep`, as an update does. `tpot elastic status` shows which objects of this release are new
+or would be updated; bring them in on the *Elastic* page or with
+`tpot elastic import --mode update` (`--dry-run` first), see [Kibana Objects](#kibana-objects).
+Keep the old source stopped and decommission it once the target is accepted.
+
+### Returning to the source
+
+To abandon the cutover of a history export and explicitly restart the original source, including
+ILM, from the tools checkout:
+
+```bash
+./tpot migrate resume-source --source ~/tpotce
+```
+
+It removes the start guard and the export's snapshot repository registration, starts the source
+and checks it against its inventory. Do not resume it alongside a productive migrated target.
+After resuming, the source changes again: create a **new final export** under a new output
+filename before migrating. Retained snapshots and packages are not removed by the recovery
+command.
+
+`resume-source` refuses when it cannot prove that the source is the one it stopped, for example
+after `.env` or the images changed during the export, or when the private migration state is gone.
+To return to the source by hand, remove the start guard, start T-Pot and, once Elasticsearch
+answers, restart ILM and remove the export's repository registration if it is still listed with
+the location `/snapshots/original`:
+
+```bash
+sudo rm /etc/systemd/system/tpot.service.d/90-tpot-migration.conf
+sudo systemctl daemon-reload
+sudo systemctl start tpot
+curl -s -XPOST http://127.0.0.1:64298/_ilm/start
+curl -s http://127.0.0.1:64298/_snapshot/migration
+curl -s -XDELETE http://127.0.0.1:64298/_snapshot/migration
+```
+
+<br>
+
 ## T-Pot ISO (preview)
 
-The T-Pot ISO is a **preview you build from source**; there is no released ISO download yet. It is Debian's own current Debian 13 netinst (x86-64 or arm64) with **Install T-Pot** added as the default boot menu entry: it installs the preferred host platform and then hands over to the same T-Pot installer as on a prepared Debian.
+The T-Pot ISO is a **preview you build from source**; there is no released ISO download yet. It is Debian's own current Debian 13 netinst (x86-64 or arm64) with **Install T-Pot** added as the default boot menu entry: it installs Debian 13 and then hands over to the same T-Pot installer as on a prepared Debian.
 
 ```bash
 git clone https://github.com/telekom-security/tpotce
@@ -635,7 +840,7 @@ The assistant accepts `tpot install [--classic] [--sudo-nopasswd] [--become-file
 on privately, not asked again. Supplied password files remain yours; only the installer's temporary
 copies are removed. A failed cleanup is reported as a failure, with the files to remove manually.
 
-On **Ubuntu 26.04** `sudo` is [sudo-rs](https://github.com/trifectatechfoundation/sudo-rs), which formats its password prompt differently. Ansible does not recognise that prompt and privilege escalation times out, a fix exists upstream but is not released yet. The installer detects this and runs Ansible against the traditional sudo that Ubuntu still ships as `/usr/bin/sudo.ws` - nothing to do, it says so when it happens. If you would rather have it system wide, switch the alternative: `$ sudo update-alternatives --set sudo /usr/bin/sudo.ws`.
+Where `sudo` is [sudo-rs](https://github.com/trifectatechfoundation/sudo-rs), its password prompt is formatted differently. Ansible does not recognise that prompt and privilege escalation times out. The installer detects this and runs Ansible against a traditional sudo installed next to it (`/usr/bin/sudo.ws` or another entry of `update-alternatives --list sudo`) and says so. Without one it stops and names the ways out: install the traditional sudo or set up passwordless sudo.
 <br><br>
 
 ## Unattended Installation
@@ -651,7 +856,7 @@ The installer can run without any interaction, i.e. for automated tests or cloud
 | `-P` | Read the web user password from a file (`-` for stdin), required for `h`, `l`, `i` and `t` (or `-p`) |
 | `-p` | The web user password itself; it shows up in the process list and the shell history, so prefer `-P` |
 | `-B` | Read the `sudo` password from your private file (`chmod 600`), or `-` for stdin, so `-s` works without passwordless `sudo` |
-| `-c` | Install your own compose file (i.e. from `tpot customize`) instead of an edition, `-t` is then `h` (with a web UI) or `s` (without) |
+| `-c` | Install your own compose file (e.g. from `tpot customize`): use `-t h` for HIVE, `-t s` for SENSOR or `-t m` for MOBILE (local Logstash, no sensor ingest or web UI). Raspberry Pi OS supports the built-in Mobile edition only. |
 | `-U` | No [automatic updates](#automatic-updates-debian) on Debian: writes `TPOT_AUTO_UPDATES=DISABLED` into `~/tpotce/.env` |
 | `--sudo-nopasswd` | Keep passwordless sudo through T-Pot's own rule; unattended installations otherwise select the more secure mode |
 | `--user <name>` | When started as root from a saved installer file, continue as this existing regular user |
@@ -755,22 +960,11 @@ The branch is checked out for good, so every following `update.sh -y` keeps upda
 <br><br>
 
 ## macOS & Windows
-T-Pot runs on Linux only, [Debian](#choose-your-distro) is the preferred host. Docker Desktop (on macOS, Windows or Linux) and WSL2 are no T-Pot hosts: the honeypots, Suricata, P0f and the firewall rules need the kernel and the network of the host itself, so `tpotinit` stops there, and `install.sh`, `update.sh` and `restore.sh` refuse WSL2. On a Mac or a Windows PC run T-Pot in a [Debian VM](#running-in-a-vm), i.e. the arm64 [T-Pot ISO](#t-pot-iso-preview) in UTM on Apple Silicon; browser and SSH access to a T-Pot host work from any system.
+T-Pot runs on [Debian 13](#choose-your-distro) only (Raspberry Pi OS for T-Pot Mobile). Docker Desktop (on macOS, Windows or Linux) and WSL2 are no T-Pot hosts: the honeypots, Suricata, P0f and the firewall rules need the kernel and the network of the host itself, so `tpotinit` stops there, and `install.sh`, `update.sh` and `restore.sh` refuse WSL2. On a Mac or a Windows PC run T-Pot in a [Debian VM](#running-in-a-vm), i.e. the arm64 [T-Pot ISO](#t-pot-iso-preview) in UTM on Apple Silicon; browser and SSH access to a T-Pot host work from any system.
 
 A checkout on macOS still prepares a T-Pot host: the [T-Pot Manager](#the-t-pot-manager-tpot) (`./tpot`) edits the edition and its services, the settings, the LLM backends and the web users there (the pages of a running T-Pot stay locked), `compose/customizer.py` builds a compose file, and the [ISO builder](#t-pot-iso-preview) and the smoke tests of `docker/_tests` (see [Build the Images Yourself](#build-the-images-yourself)) run as well. Update such a checkout with `git pull`. Neither the T-Pot Manager nor the customizer runs on Windows.
 
-If you ran the former MAC_WIN edition with Docker Desktop: export your Kibana objects first (Kibana, *Stack Management*, *Saved Objects*, *Export*), install T-Pot on a Linux host or VM and bring them back with `tpot elastic restore FILE`. The events in Elasticsearch are not carried over. A `docker-compose.yml` of that edition is refused by the customizer with a hint; take an edition with `tpot edition set`.
-
-## Red Hat Enterprise Linux
-
-RHEL 10 is a **best-effort** host platform, not an alternative with the same support commitment as Debian.
-
-Red Hat Enterprise Linux (RHEL) is a somewhat unique case in that:
-
-1. Connections to Red Hat repositories depend on a Red Hat subscription. You will not be able to update the OS or install new packages if the targeted machine is not subscribed. **If your server is not attached to a Red Hat subscription, installation will fail!** 
-2. Ansible is installed from a RHEL-specific repository by the installer. Do not attempt to install it from the upstream repositories. 
-3. Docker is installed from EPEL, which is installed by the installer script. Do not attempt to install it from the community installer script.
-2. T-Pot will only install successfully on RHEL 10. The convenience dependency `grc` is not available for RHEL and is omitted from the RHEL installation of T-Pot.
+If you ran the former MAC_WIN edition with Docker Desktop: export your Kibana objects first (Kibana, *Stack Management*, *Saved Objects*, *Export*), install T-Pot on a Debian 13 host or VM and bring them back with `tpot elastic restore FILE`. The events in Elasticsearch are not carried over. A `docker-compose.yml` of that edition is refused by the customizer with a hint; take an edition with `tpot edition set`.
 
 ## Installation Types
 
@@ -787,7 +981,7 @@ The distributed version of T-Pot requires at least two hosts
 <br><br>
 
 ## Uninstall T-Pot
-Uninstallation of T-Pot is only available on the [supported Linux distros](#choose-your-distro).<br>
+Uninstallation of T-Pot is available on [Debian](#choose-your-distro) and on the distributions earlier releases installed on.<br>
 To uninstall T-Pot run `tpot uninstall` (or *Uninstall ...* on the *Update & backup* page of the menu): it lists what is removed and reverted, offers a full backup to `~/tpot_backups` first (`restore.sh` brings it back after a new installation) and asks you to type the name of the host to confirm, then hands over to `~/tpotce/uninstall.sh`. `uninstall.sh` works on its own as well:
 ```
 ~/tpotce/uninstall.sh            # asks first
@@ -837,6 +1031,7 @@ A distributed T-Pot is one **Hive** and any number of **Sensors**. Install the *
 | `tpot sensors remove NAME` | revokes access and deletes the current heartbeat status, retaining history |
 | `tpot sensors set NAME --host … --ssh-user …` | adds where a sensor is, i.e. for sensors of earlier releases |
 | `tpot sensors cert` | shows the certificate of the **Hive** (key, issuer, end, the addresses it covers), `--renew` issues a self-signed one anew and reloads nginx, `--distribute` copies it to the sensors |
+| `tpot sensors hive-address ADDRESS [NAME ...]` | sets the address the sensors reach the **Hive** on and restarts T-Pot there, see [Changing the HIVE address](#changing-the-hive-address) |
 | `tpot sensors import` | gives the sensors of `lswebpasswd` / `lswebpasswd.lost` that `LS_WEB_USER` does not name their access back |
 | `tpot sensors update [NAME ...] [--all] [--parallel N|all] [--dry-run] [-y] [--become-file FILE|--no-become-pass] [--accept-data-loss|--accept-data-loss-file FILE] [--resume|--discard]` | prepares and coordinates sensor updates from the **Hive** |
 
@@ -986,6 +1181,23 @@ sudo systemctl start tpot
 Then copy `nginx.crt` to `~/tpotce/data/hive.crt` on every sensor and restart T-Pot there.
 
 The T-Pot configuration file (`.env`) does allow to disable the SSL verification of the connections from Fluent Bit on the **Sensor** to the **Hive** by setting `LS_SSL_VERIFICATION=none` on the **Sensor** (the default is `full`). For security reasons this is only recommended for lab or test environments. Such a **Sensor** checks no certificate, nothing of the above affects it.
+
+### Changing the HIVE address
+A **Sensor** sends to the address in its `TPOT_HIVE_IP` and checks the **Hive** against the certificate in its `~/tpotce/data/hive.crt`. When the **Hive** moves to another address (i.e. a [migration](#migrating-to-a-supported-debian-host) to a host with a new address), change it on all registered sensors from the **Hive**:
+```
+tpot sensors hive-address <new address> [NAME ...]
+```
+or with *HIVE address...* on the *Sensors* page (all registered sensors). Options: `--no-become-pass` (sudo on the sensors needs no password), `-y` (do not ask). It
+1. checks the address (an IPv4 address or a host name with an IPv4 (A) record, as for `tpot sensors add`), the certificate of the **Hive** and that the **Hive** runs (it waits for the sensors in its Elasticsearch),
+2. logs in on each sensor with its SSH key on port `64295` and checks that it is a T-Pot **Sensor** of a known release on Debian, held by no migration and in no update; a sensor of a saved [fleet update](#distributed-deployment) waits until that update is finished (`tpot sensors update --resume`) or dropped (`--discard`). Every sensor it leaves as it is is named with the reason,
+3. asks once and, where the certificate of the **Hive** does not cover the new address, issues a self-signed one anew for the old and the new addresses and reloads nginx (a certificate of a CA that does not cover it stops it before any change: get one with the new address from the CA first, see [Planning and Certificates](#planning-and-certificates)),
+4. runs the Ansible playbook `installer/install/sensor_hive.yml` on the sensors: it copies the certificate, sets `TPOT_HIVE_IP` and restarts T-Pot there (Ansible asks for the sudo password on the sensors); after a renewal the other sensors of the **Hive** get the new certificate as well (which restarts their Fluent Bit), except those a migration holds, in an update or of a saved fleet update: each is named with `tpot sensors cert --distribute NAME` for when it is done; one it cannot ask is named for by hand,
+5. waits up to 5 minutes until the **Hive** hears of each sensor at the new address: a heartbeat of its restarted Fluent Bit, for a sensor of 24.04.1 its refused events,
+6. reads `TPOT_HIVE_IP` back on every sensor it changed (also after Ctrl+C), records the new address of each that has it, names what is left to do by hand and the command back to the old address.
+
+Before the first run from a new **Hive** (i.e. after a migration) it needs a key login on every sensor: `ssh-keygen` once, then `ssh-copy-id -p 64295 <Sensor_SSH_USER>@<Sensor_IP>`. Sensors deployed with an earlier release need their address first: `tpot sensors set NAME --host <Sensor_IP> --ssh-user <Sensor_SSH_USER>`. Change the address of a sensor of 24.04.1 first, then update it with `tpot sensors update`: the update waits for the heartbeat of the sensor on this **Hive**. Exit codes: `0` every sensor it tried sends to the new address, `1` one does not, none could be tried or one that should get the new certificate could not be asked, `2` a wrong option, an address or certificate it cannot take or no terminal to ask (use `-y`), `130` cancelled.
+
+By hand: first on the **Hive**, if `tpot sensors cert` does not list the new address among those the certificate covers (i.e. after a migration, its `nginx.crt` came along with the old address), issue it anew with the new one: `tpot sensors cert --renew --add <new address>` (a certificate of a CA: reissue it there); a **Sensor** refuses a **Hive** whose certificate does not name the address it sends to. Then on the **Sensor**: set `TPOT_HIVE_IP=<new address>` in `~/tpotce/.env`, copy `~/tpotce/data/nginx/cert/nginx.crt` of the **Hive** to `~/tpotce/data/hive.crt` and restart T-Pot (`sudo systemctl restart tpot`). Then on the **Hive**: `tpot sensors set NAME --hive-address <new address>`, which only records the address, it changes nothing on the sensor.
 
 ### Deploying Sensors
 Once you have rebooted the **Sensor** as instructed by the installer, log into the **Hive** and run:
@@ -1169,12 +1381,14 @@ ambiguous events to a particular probe. `--keep` leaves the test events in Elast
 | `tpot llm [detect [--scan]\|models\|test]` | *LLM* | every host | the LLM backends of Beelzebub and Galah: their settings, find an Ollama (the configured URLs, this host, its Docker bridges and gateways; `--scan` asks every address of the /24 of this host, after a confirmation), list the models, send a short test prompt |
 | **Access** | | | |
 | `tpot sensors [list\|add\|remove\|set\|cert\|import]` | *Sensors* (`set` is *Edit*, `import` is *Take over*) | T-Pot host, HIVE | the [sensors](#distributed-deployment) of a HIVE |
+| `tpot sensors hive-address ADDRESS [NAME ...] [--no-become-pass] [-y]` | *Sensors* (*HIVE address...*) | T-Pot host, HIVE | sets the address the sensors reach the HIVE on (their `TPOT_HIVE_IP`) and restarts T-Pot there, the certificate renewed where it does not cover it, see [Changing the HIVE address](#changing-the-hive-address) |
 | `tpot sensors update [NAME ...] [--all] [--parallel N\|all] [--dry-run] [-y] [--become-file FILE\|--no-become-pass] [--accept-data-loss\|--accept-data-loss-file FILE] [--resume\|--discard]` | *Sensors* | T-Pot host, HIVE | prepares all targets first, runs one canary before any parallel updates, verifies service/container health and a fresh heartbeat with the target version; failures can be retried, skipped, rolled back explicitly or resumed, and `-y` never approves data loss |
 | `tpot sensors sudo [NAME ...] status\|secure\|convenient [-y] [--become-file FILE] [--user-password-file FILE]` | *Sensors* | T-Pot host, HIVE | the same sudo-mode operation over SSH, on the named registered sensors or all when no names are given; uses their registered login users and ports |
 | `tpot users [list\|add\|passwd\|remove\|import]` | *Web users* (`import` is *Take over*) | HIVE | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
 | **Data & maintenance** | | | |
 | `tpot elastic [status]` / `tpot elastic retention [DAYS\|off] [--sensor-history] [--adopt] [--force] [--accept-data-loss]` | *Elastic* | T-Pot host, HIVE | event retention (`TPOT_ES_RETENTION`, policy `tpot`), or with `--sensor-history` heartbeat history (`TPOT_SENSOR_STATUS_RETENTION`, policy `tpot-sensor-status`); a shorter time always asks first (also with `-y`; without a terminal `--accept-data-loss`), T-Pot never shortens it on its own, and lists the indices it deletes; a policy changed in Kibana is left alone until you keep it (`--adopt`, its days go into `.env`) or apply a value to it (`--force` applies the `.env` value, or the given value), `DAYS` alone writes only `.env` then and says so (exit 0), as the pages do; where Elasticsearch cannot be read it says why and writes only `.env`. `status` shows both retentions, `TPOT_KIBANA_OBJECTS` and what an import would bring (new, to update, the same, yours), or why Kibana cannot be read |
 | `tpot elastic export [FILE]` / `tpot elastic import [--mode add\|update\|overwrite] [--dry-run] [-y]` / `tpot elastic import --prune [--dry-run] [-y]` / `tpot elastic restore FILE [-y]` | *Elastic* | T-Pot host, HIVE (with Kibana) | T-Pot's [Kibana objects](#kibana-objects): `export` saves every object into `~/tpot_backups` (or into the new `FILE`); `import` brings T-Pot's objects in as the mode does (default `update`: the missing and the unchanged ones, yours stay), `--dry-run` only shows what it would do, `overwrite` lists the objects of yours it replaces and asks first (`-y` confirms, without a terminal it needs `-y`, exit 2); `import --prune` imports nothing, it lists the unchanged objects of earlier releases that this one no longer ships and removes them after an export and its question (default no, `-y` confirms, without a terminal it needs `-y`, exit 2; with `--mode` exit 2); `restore` checks the file, asks and imports every object of it, the advanced settings too; `restore` and `import` with `update` or `overwrite` export first and import nothing if that fails (`add` replaces nothing and makes no export); exit 1 on an error or an object Kibana refused, "This edition runs no Kibana." where it has none |
+| `tpot migrate inspect --source DIR` / `export --source DIR --output FILE [--history] [-y] [-B FILE]` / `resume-source --source DIR [-y] [-B FILE]` / `validate FILE` / `import FILE [--yes]` | *Update & backup* (*Export for a migration ...*, *Resume the source*; `inspect`, `validate`, `import` on the command line) | Linux source host; import on a fresh supported Debian 13 target | inspect/export configuration and identity, optionally export a frozen history snapshot, explicitly resume its source, validate a package, or stage it for `install.sh --migration`, which restores and verifies a history before T-Pot starts |
 | `tpot install [--classic] [--sudo-nopasswd] [--become-file FILE] [--user-password-file FILE]` | `ctrl+f` *Install T-Pot* | Linux without T-Pot | the installer assistant, see [Get and install T-Pot](#get-and-install-t-pot) (the installer starts it for you) |
 | `tpot restore [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/restore.sh` with your options; the menu lets you pick the archive and its parts and asks before it replaces `data/` (naming the size of the Elasticsearch data when the archive holds it) |
 | `tpot setup [--force] [--wheels DIR]` | *Update & backup* (*Rebuild the Manager's packages*) | every host | sets up or refreshes the Python packages of `tpot`; `--force` builds the venv anew, next to the old one, swapped when it works; `--wheels` installs from a folder of wheels first, without the internet (the T-Pot ISO has them, default `TPOT_WHEELS`), PyPI only when they do not fit |
@@ -1182,7 +1396,9 @@ ambiguous events to a particular probe. `--keep` leaves the test events in Elast
 | `tpot uninstall [--keep-sudo-rule]` | *Update & backup* | T-Pot host | removes T-Pot, with a full backup first if you like; keeps its sudo rule on request or if removing it risks access, see [Uninstall T-Pot](#uninstall-t-pot) |
 | `tpot update [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y`; the menu runs it with its phases and log, after `--check-data-loss` and a question if the update would [lose data](#loss-of-data) |
 
-The installer links `~/tpotce/tpot` to `/usr/local/bin/tpot` and `update.sh` keeps it up to date. `tpot` runs from a Python venv of its own in `~/.local/share/tpotce/venv`, set up on first use from pinned and hash-checked packages (it needs pypi.org once, and `python3-venv` on Debian / Ubuntu, which the installer brings along). `update.sh`, `restore.sh` and the other scripts keep working on their own, `tpot` only calls them. Do not run `tpot` as root, it uses `sudo` where needed.
+`tpot migrate` runs without the Manager's Textual venv. Its cross-host flow and limitations are documented under [Migrating to a Supported Debian Host](#migrating-to-a-supported-debian-host).
+
+The installer links `~/tpotce/tpot` to `/usr/local/bin/tpot` and `update.sh` keeps it up to date. Most `tpot` commands run from a Python venv of their own in `~/.local/share/tpotce/venv`, set up on first use from pinned and hash-checked packages (it needs pypi.org once, and `python3-venv`, which the installer brings along). `update.sh`, `restore.sh` and the other scripts keep working on their own, `tpot` only calls them. Do not run `tpot` as root, it uses `sudo` where needed.
 
 The menu starts with the T-Pot ANSI logo in the style of the BBS days: its parts come together, it runs its animation once (honey drops, a light over the lettering) while the version and the credits type themselves, then it crumbles into the dark (about eight seconds, any key goes on at once, not in a terminal smaller than 80 x 24, `TPOT_SPLASH=off` leaves it out). The arrow keys move through it, on every page and in every dialog: up / down in the menu on the left, right or enter into the page; on a page up / down go from line to line (a row of buttons is one line, lists and tables first to their end), left / right along the line and between tabs, left at the start of a line back to the menu (in a text field left / right move the cursor and only go on to the button next to it), enter on a list you choose from (editions, backups) takes the choice and goes on to its buttons, on a web user or sensor it offers the actions of that row, esc back to the menu. On the *Settings* page up / down go from setting to setting (the one you are on is framed, changed ones are tagged *changed*), enter or space opens a list or flips a switch, `ctrl+s` saves (on the *LLM* page too, the footer shows it). `ctrl+f` finds every page, action and setting (*find* in the footer), `f2` switches between the icon sets. The default icons are symbols every font has, `nerd` needs a [Nerd Font](https://www.nerdfonts.com) in the terminal you look at (on the other end of an SSH connection that is the font of your own computer), `ascii` uses plain characters only. Your choice is kept in `~/.config/tpotce/tpot.json`, `TPOT_ICONS` (`unicode`, `nerd` or `ascii`) in the environment wins over it. **Colours:** the T-Pot Manager shows its true colours where the terminal says it can: `COLORTERM=truecolor`, a `TERM` of a true colour terminal (kitty, Ghostty, Alacritty, foot, WezTerm, Contour, Rio, `*-direct`) or, outside tmux and screen, a terminal that says who it is (`TERM_PROGRAM` of iTerm2, WezTerm, VS Code, Ghostty, Hyper, Tabby, Rio or Warp, `LC_TERMINAL=iTerm2`, GNOME Terminal and the other VTE terminals by `VTE_VERSION`, Konsole, Windows Terminal). The T-Pot scripts follow the same rule. Where the terminal only says 256 colours (SSH from most terminals, tmux, the Terminal of macOS), the T-Pot Manager takes a palette of its own made for 256 colours (the dark magenta would turn into maroon otherwise), and one made of the 16 ANSI colours where the terminal says only those (`TERM=xterm` as PuTTY sets it, `TERM=screen`). To get the true colours over SSH, see [True colours over SSH](#true-colours-over-ssh), or choose them with `TPOT_COLORS=truecolor` (`auto`, `truecolor`, `256` or `16`, also in the palette, `ctrl+f` *Colours*, from the next start on). The *Status* page counts the services of the compose file in use by group (honeypots, NSM, infrastructure: running, healthy, starting, failed, stopped; other containers on the host are not shown and not counted, `tpot ps` lists them all), names what needs attention and the last check, shows CPU, memory and the disk of the T-Pot data, and on a HIVE the honeypot events from Elasticsearch: per minute of the last hour, the totals of the hour and the day, the source IPs of the hour (an estimate), how long ago the newest event came in and the busiest honeypots; its *Services* tab lists every service with its group, status and number of ports, Enter shows its complete status, image and port mappings. The header on top of every page says what this T-Pot is (type, edition, version and branch, host and checkout, the address of the web UI or, on a SENSOR, of its HIVE) and how it is doing (the service and how long it runs, the containers that are up, the uptime and load of the host, and a disk of the T-Pot data that is more than 90 % full).
 
@@ -1201,7 +1417,7 @@ iTerm2 is recognised over SSH by itself: it sets `LC_TERMINAL=iTerm2`, which the
 1. T-Pot accepts `COLORTERM` and `LC_TERMINAL`: the installer writes `AcceptEnv COLORTERM LC_TERMINAL LC_TERMINAL_VERSION` to `/etc/ssh/sshd_config.d/tpot.conf` (some distributions, e.g. Debian 13, accept them already). On a T-Pot installed before, `update.sh` brings the `AcceptEnv COLORTERM` of an earlier T-Pot to this line (only that file as T-Pot wrote it, checked with `sshd -t`, then SSH is reloaded; a file you changed stays as it is). Without the update, or with a file of your own, add it yourself:
    ```
    echo "AcceptEnv COLORTERM LC_TERMINAL LC_TERMINAL_VERSION" | sudo tee /etc/ssh/sshd_config.d/tpot.conf
-   sudo sshd -t && sudo systemctl reload ssh    # sshd on AlmaLinux, Fedora, openSUSE, RHEL, Rocky
+   sudo sshd -t && sudo systemctl reload ssh
    ```
 2. Your SSH client sends it, in `~/.ssh/config` on your own computer (the ssh of macOS and most Linux distributions only sends `LANG` and `LC_*` by itself):
    ```
@@ -1275,7 +1491,7 @@ To create your customized docker compose file:
 5. Replace the docker compose file: `mv ~/tpotce/docker-compose-custom.yml ~/tpotce/docker-compose.yml`.
 6. Start T-Pot with `systemctl start tpot`.
 
-The full screen dialog comes from the venv of `tpot`. Only for the headless use and for `update.sh` the customizer is content with PyYAML of your distribution (`python3-yaml` on Debian / Raspberry Pi OS / Ubuntu, `python3-pyyaml` on Fedora / AlmaLinux / Rocky / RHEL, `python3-PyYAML` on openSUSE), which the installer and `update.sh` bring along.
+The full screen dialog comes from the venv of `tpot`. Only for the headless use and for `update.sh` the customizer is content with PyYAML of Debian / Raspberry Pi OS (`python3-yaml`), which the installer and `update.sh` bring along.
 
 Running the customizer again starts from your current configuration. Without a terminal, without the venv, or with `--text`, it asks the same as numbered lists. It also works without any dialog:
 ```
@@ -1351,7 +1567,7 @@ Should an update fail, opening an issue or a discussion will help to improve thi
 <br><br>
 
 ## General Updates
-T-Pot security depends on the updates provided for the [supported Linux distro images](#choose-your-distro). Make sure to review the OS documentation and ensure updates are installed regularly by the OS. On Debian, T-Pot does this for you, see [Automatic Updates (Debian)](#automatic-updates-debian). By default (`~/tpotce/.env`) `TPOT_PULL_POLICY=always` will ensure that at every T-Pot start docker will check for new docker images and download them before creating the containers.
+T-Pot security depends on the updates provided for [Debian](#choose-your-distro). Make sure to review the OS documentation and ensure updates are installed regularly by the OS. On Debian, T-Pot does this for you, see [Automatic Updates (Debian)](#automatic-updates-debian). By default (`~/tpotce/.env`) `TPOT_PULL_POLICY=always` will ensure that at every T-Pot start docker will check for new docker images and download them before creating the containers.
 <br><br>
 
 ## Automatic Updates (Debian)
@@ -1361,7 +1577,7 @@ On Debian (Raspberry Pi OS 64-bit included) the installer, the [T-Pot ISO](#t-po
 
 What happened, the update of the Docker Engine included: `journalctl -t tpot-auto-updates`, the security updates: `/var/log/unattended-upgrades/`.
 
-Turn both off with `TPOT_AUTO_UPDATES=DISABLED` in `~/tpotce/.env` (`tpot env set TPOT_AUTO_UPDATES=DISABLED`, *Settings* of the T-Pot Manager, the install assistant on Debian, or `install.sh -U`). The host reads it on every run, T-Pot needs no restart. The pin of the Docker Engine stays either way, so your own updates stay within the tested major release. Ubuntu and the other distributions get neither, keep their updates in mind. `uninstall.sh` removes all of it, `unattended-upgrades` only if T-Pot installed it.
+Turn both off with `TPOT_AUTO_UPDATES=DISABLED` in `~/tpotce/.env` (`tpot env set TPOT_AUTO_UPDATES=DISABLED`, *Settings* of the T-Pot Manager, the install assistant on Debian, or `install.sh -U`). The host reads it on every run, T-Pot needs no restart. The pin of the Docker Engine stays either way, so your own updates stay within the tested major release. `uninstall.sh` removes all of it, `unattended-upgrades` only if T-Pot installed it.
 <br><br>
 
 ## Update Script
@@ -1651,8 +1867,9 @@ docker/_builder/builder.sh --show-config                            # every sett
 By default T-Pot will add a daily reboot including some cleaning up. You can adjust this line with `sudo crontab -e` 
 ```
 #Ansible: T-Pot Daily Reboot
-42 2 * * * bash -c 'systemctl stop tpot.service && docker container prune -f; docker image prune -f; docker volume prune -f; /usr/sbin/shutdown -r +1 "T-Pot Daily Reboot"'
+42 2 * * * bash -c 'test -e /etc/systemd/system/tpot.service.d/90-tpot-migration.conf && exit 0; systemctl stop tpot.service && docker container prune -f; docker image prune -f; docker volume prune -f; /usr/sbin/shutdown -r +1 "T-Pot Daily Reboot"'
 ```
+The first test skips the reboot while the start guard of a migration (`tpot migrate`) is in place, so it does not cut off a running export or restore; keep it if you change the line.
 On Debian the line also runs the update of the Docker Engine before the reboot (it does something on Sundays only, see [Automatic Updates (Debian)](#automatic-updates-debian)); keep `/usr/local/sbin/tpot-auto-updates docker /home/<user>/tpotce;` in front of `/usr/sbin/shutdown` if you change it. `update.sh` puts it back there if it is missing.
 
 ## Known Issues

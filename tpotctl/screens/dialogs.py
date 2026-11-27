@@ -406,3 +406,79 @@ class SensorEditDialog(HiveField, NavModal):
 
     def action_cancel(self) -> None:
         self.dismiss(None)
+
+
+class HiveAddressDialog(HiveField, NavModal):
+    """The address all registered sensors reach this HIVE on (tpot sensors hive-address), dismissed with a
+    dict or None. propose (no argument) looks up the address this HIVE reaches them from, in a thread."""
+
+    BINDINGS = [Binding("escape", "cancel", "Back")]
+    hive_id, hint_id = "hive-address", "hive-address-hint"
+
+    def __init__(self, current, propose=None, check_hive=None):
+        super().__init__()
+        self.current, self.propose, self.check_hive = list(current), propose, check_hive
+        self.proposal = ""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="dialog"):
+            yield DialogTitle("Change the HIVE address")
+            yield Static(Text(f"The sensors reach this HIVE on {', '.join(self.current) or 'no recorded address'}. "
+                              f"Each registered sensor gets the new address over SSH (sudo password) and restarts "
+                              f"T-Pot; the certificate is renewed if it does not cover the address. It runs in the "
+                              f"terminal."), classes="hint")
+            yield NavInput(placeholder=HIVE_PLACEHOLDER, id="hive-address")
+            yield Checkbox("sudo on the sensors needs no password", id="hive-address-nopass")
+            yield Label("", id="hive-address-hint")
+            with Horizontal(classes="actions"):
+                yield Button("Change", variant="primary", id="hive-address-change")
+                yield Button("Back", id="hive-address-back")
+
+    def on_mount(self) -> None:
+        self.query_one("#hive-address", Input).focus()
+        if self.propose is not None:
+            self.look_up()
+
+    @work(thread=True, exclusive=True, group="hive-proposal")
+    def look_up(self) -> None:
+        try:
+            proposal = self.propose() or ""
+        except Exception:      # a proposal only
+            proposal = ""
+        try:
+            self.app.call_from_thread(self.proposed, proposal)
+        except RuntimeError:   # the app is gone
+            pass
+
+    def proposed(self, proposal: str) -> None:
+        if not self.is_mounted:
+            return
+        self.proposal = proposal
+        self.query_one("#hive-address", Input).placeholder = HIVE_PLACEHOLDER + (f" [{proposal}]" if proposal else "")
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        self.hive_changed(event)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        self.focus_next()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id != "hive-address-change":
+            self.dismiss(None)
+            return
+        address = self.query_one("#hive-address", Input).value.strip() or self.proposal
+        hint = self.query_one("#hive-address-hint", Label)
+        if not address:
+            hint.update(Text("Enter the address the sensors reach this HIVE on.",
+                             style=f"bold {theme.color('error')}"))
+            return
+        try:
+            if self.check_hive is not None:
+                self.check_hive(address)
+        except Exception as err:   # SensorsError, kept generic to stay UI-only
+            hint.update(Text(str(err), style=f"bold {theme.color('error')}"))
+            return
+        self.dismiss({"address": address, "nopass": self.query_one("#hive-address-nopass", Checkbox).value})
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)

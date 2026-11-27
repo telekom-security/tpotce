@@ -51,6 +51,17 @@ if textual:
         def backups(self):
             return []
 
+        # the Update & backup page: what update.sh would say of this host (None: it takes it) and the
+        # role of a migration hold ("", "source", "held")
+        platform_value = None
+        hold_value = ""
+
+        def update_platform(self):
+            return self.platform_value or ops.UpdatePlatform("", "")
+
+        def migration_hold(self):
+            return self.hold_value
+
         def tpot_type(self):
             return self.kind
 
@@ -301,6 +312,197 @@ class BackendConfigFreshnessTest(unittest.TestCase):
                 with self.subTest(action=action), self.assertRaisesRegex(ko.KibanaError, "Run tpot update first"):
                     action()
         dirs.assert_not_called()
+
+
+@unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
+class UpdateMigrationTest(AsyncTestCase):
+    """The Update & backup page says before update.sh what it refuses (the platform, a migration hold)
+    and offers the way out: the export for a migration in the task screen, the resume of a held source."""
+
+    UBUNTU = "Regular T-Pot updates are supported only on Debian; this host reports ubuntu."
+
+    @staticmethod
+    def info(app):
+        return " ".join(str(app.query_one("#update-info").render()).split())
+
+    @staticmethod
+    def notes(app):
+        return [(str(note.message), note.severity) for note in app._notifications]
+
+    async def open(self, backend, tasks=None):
+        """The app on the Update & backup page; tasks: a list that takes the (task, then) of run_task."""
+        FakeEngine.seen.clear()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        if tasks is not None:
+            app.run_task = lambda task, then=None: tasks.append((task, then))
+        return app
+
+    async def show(self, pilot, app):
+        await pilot.pause(0.2)
+        app.goto("update")
+        await pilot.pause(0.3)
+
+    async def test_unsupported_platform_locks_the_update_and_names_the_way(self):
+        backend = FakeBackend()
+        backend.platform_value = ops.UpdatePlatform(self.UBUNTU, "")
+        app = await self.open(backend)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await self.show(pilot, app)
+            info = self.info(app)
+            self.assertIn(self.UBUNTU, info)
+            self.assertIn(ops.UPDATE_BACKUP_HINT, info)
+            for way in ("Debian 13", "Raspberry Pi OS Lite 64-bit", "~/tpot-migration.tar", "install.sh --migration"):
+                self.assertIn(way, info)
+            self.assertTrue(app.query_one("#run-update").disabled)
+            self.assertTrue(app.query_one("#run-update-start").disabled)
+            self.assertFalse(app.query_one("#run-export").disabled)
+            self.assertFalse(app.query_one("#run-restore").disabled)
+            self.assertFalse(app.query_one("#run-resume").display)
+            self.assertEqual(app.update_block(), self.UBUNTU)
+            app.run_update(["-y"])
+            await pilot.pause(0.3)
+            self.assertIn((self.UBUNTU, "error"), self.notes(app))
+        self.assertNotIn(("loss", []), backend.calls)                 # not even the check runs
+        self.assertEqual(FakeEngine.seen, [])
+
+    async def test_debian_12_transition_is_named(self):
+        backend = FakeBackend()
+        backend.platform_value = ops.UpdatePlatform("", ops.DEBIAN_12_TRANSITION)
+        app = await self.open(backend)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await self.show(pilot, app)
+            info = self.info(app)
+            self.assertIn(" ".join(ops.DEBIAN_12_TRANSITION.split()), info)
+            self.assertIn("24.04.2", info)
+            self.assertFalse(app.query_one("#run-update").disabled)     # the update to 24.04.2 itself is fine
+            self.assertEqual(app.update_block(), "")
+
+    async def test_hold_locks_the_update_and_offers_resume_only_on_the_source(self):
+        from tpotctl import sensor_probe
+        held = ops.MIGRATION_HELD.format(guard=sensor_probe.HOLD)
+        for role in ("source", "held"):
+            with self.subTest(role=role):
+                backend = FakeBackend()
+                backend.hold_value = role
+                app = await self.open(backend)
+                async with app.run_test(size=(120, 40)) as pilot:
+                    await self.show(pilot, app)
+                    info = self.info(app)
+                    self.assertIn(held, info)
+                    for hint in ops.MIGRATION_HINTS + (ops.MIGRATION_BACKUP_HINT,):
+                        self.assertIn(hint, info)                        # held: which side it is, is not known
+                    self.assertTrue(app.query_one("#run-update").disabled)
+                    self.assertTrue(app.query_one("#run-update-start").disabled)
+                    self.assertEqual(app.query_one("#run-resume").display, role == "source")
+                    self.assertEqual(app.update_block(), held)
+
+    async def test_update_from_the_palette_is_refused_too(self):
+        from tpotctl import sensor_probe
+        from tpotctl.commands import TpotCommands
+        from tpotctl.screens.task import TaskScreen
+        for platform, hold, said in ((ops.UpdatePlatform(self.UBUNTU, ""), "", self.UBUNTU),
+                                     (None, "held", ops.MIGRATION_HELD.format(guard=sensor_probe.HOLD))):
+            with self.subTest(said=said):
+                backend = FakeBackend()
+                app = await self.open(backend)
+                async with app.run_test(size=(120, 40)) as pilot:
+                    await self.show(pilot, app)
+                    # the page said nothing against it; the host changed since: the palette checks anew
+                    backend.platform_value, backend.hold_value = platform, hold
+                    found = {name: callback for name, _help, callback in TpotCommands(app.screen).commands()}
+                    found["Update T-Pot"]()
+                    await pilot.pause(0.4)
+                    self.assertNotIsInstance(app.screen, (TaskScreen, ConfirmDialog))
+                    self.assertIn((said, "error"), self.notes(app))
+                    self.assertTrue(app.query_one("#run-update").disabled)
+                self.assertNotIn(("loss", []), backend.calls)
+                self.assertEqual(FakeEngine.seen, [])
+
+    async def test_configuration_export_runs_in_the_task_screen(self):
+        from tpotctl.screens.task import TaskScreen
+        tasks = []
+        app = await self.open(FakeBackend(), tasks)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await self.show(pilot, app)
+            await pilot.click("#run-export")
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, ChoiceDialog)
+            await pilot.press("enter")                                  # the first: the configuration
+            await pilot.pause(0.3)
+        export = [tapp.LAUNCHER, "migrate", "export", "--source", os.path.expanduser("~/tpotce"),
+                  "--output", os.path.expanduser("~/tpot-migration.tar")]
+        self.assertEqual([task.command for task, _then in tasks], [export])
+        self.assertEqual(tasks[0][0].become, "")                        # the configuration needs no sudo
+        self.assertIsNotNone(tasks[0][1])                               # the page shows itself anew after it
+        # and in the task screen itself
+        app = await self.open(FakeBackend())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await self.show(pilot, app)
+            await pilot.click("#run-export")
+            await pilot.pause(0.3)
+            await pilot.press("enter")
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, TaskScreen)
+            await pilot.click("#task-run")
+            await pilot.pause(0.4)
+        self.assertEqual(FakeEngine.seen, [export])
+
+    async def test_history_export_asks_first(self):
+        history = [tapp.LAUNCHER, "migrate", "export", "--source", os.path.expanduser("~/tpotce"),
+                   "--output", os.path.expanduser("~/tpot-history.tar"), "--history", "-y"]
+        for answer, expected in (("no", []), ("yes", [history])):
+            with self.subTest(answer=answer):
+                tasks = []
+                app = await self.open(FakeBackend(), tasks)
+                async with app.run_test(size=(120, 40)) as pilot:
+                    await self.show(pilot, app)
+                    await pilot.click("#run-export")
+                    await pilot.pause(0.3)
+                    await pilot.press("down", "enter")                  # the second: with the history
+                    await pilot.pause(0.3)
+                    self.assertIsInstance(app.screen, ConfirmDialog)
+                    self.assertEqual(app.focused.id, "no")
+                    shown = " ".join("".join(str(w.render()) for w in app.screen.query("Static")).split())
+                    for what in ("stopped", "reboot", "Resume the source", "~/tpot-history.tar"):
+                        self.assertIn(what, shown)
+                    await pilot.click(f"#{answer}")
+                    await pilot.pause(0.3)
+                self.assertEqual([task.command for task, _then in tasks], expected)
+                if expected:
+                    self.assertEqual(tasks[0][0].become, "-B")          # the password as a file, never in argv
+
+    async def test_sensor_exports_the_configuration_only(self):
+        tasks = []
+        app = await self.open(FakeBackend(kind="SENSOR"), tasks)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await self.show(pilot, app)
+            await pilot.click("#run-export")
+            await pilot.pause(0.3)
+            self.assertNotIsInstance(app.screen, (ChoiceDialog, ConfirmDialog))
+        self.assertEqual([task.command for task, _then in tasks],
+                         [[tapp.LAUNCHER, "migrate", "export", "--source", os.path.expanduser("~/tpotce"),
+                           "--output", os.path.expanduser("~/tpot-migration.tar")]])
+
+    async def test_resume_asks_and_runs_resume_source(self):
+        resume = [tapp.LAUNCHER, "migrate", "resume-source", "--source", os.path.expanduser("~/tpotce"), "-y"]
+        for answer, expected in (("no", []), ("yes", [resume])):
+            with self.subTest(answer=answer):
+                backend = FakeBackend()
+                backend.hold_value = "source"
+                tasks = []
+                app = await self.open(backend, tasks)
+                async with app.run_test(size=(120, 40)) as pilot:
+                    await self.show(pilot, app)
+                    await pilot.click("#run-resume")
+                    await pilot.pause(0.3)
+                    self.assertIsInstance(app.screen, ConfirmDialog)
+                    self.assertEqual(app.focused.id, "no")
+                    await pilot.click(f"#{answer}")
+                    await pilot.pause(0.3)
+                self.assertEqual([task.command for task, _then in tasks], expected)
+                if expected:
+                    self.assertEqual(tasks[0][0].become, "-B")
+                    self.assertIsNotNone(tasks[0][1])
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
@@ -2307,6 +2509,22 @@ class MenuTest(AsyncTestCase):
                 self.assertEqual(sorted(listed - options(parser)), [])
                 if name in complete:
                     self.assertEqual(sorted(options(parser) - listed), [])
+
+    def test_readme_matrix_names_every_sub_command_of_sensors(self):
+        """`tpot sensors hive-address` and the others: a row of their own or a name of `[list|add|...]`."""
+        import argparse
+        import re
+        with open(os.path.join(cli.REPO_DIR, "README.md"), encoding="utf-8") as handle:
+            readme = handle.read()
+        start = readme.index("## The T-Pot Manager (tpot)")
+        section = readme[start:readme.index("\n## ", start + 10)]
+        cells = [row.split(" | ")[0] for row in section.splitlines() if row.startswith("| `tpot sensors")]
+        sub = next(a for a in cli.build_parser()._actions if isinstance(a, argparse._SubParsersAction))
+        inner = next(a for a in sub.choices["sensors"]._actions if isinstance(a, argparse._SubParsersAction))
+        for name in inner.choices:
+            with self.subTest(command=name):
+                self.assertTrue(any(re.match(rf"\| `tpot sensors (\[[^`\]]*(?<![\w-]){name}(?![\w-])|{name}(?![\w-]))",
+                                             cell) for cell in cells), name)
 
     def test_every_menu_pane_has_a_command(self):
         commands = {"status": "status", "edition": "edition", "settings": "env", "llm": "llm", "users": "users",

@@ -19,7 +19,7 @@ from tpotctl.tests import isolate  # noqa: E402
 
 isolate()   # keeps the user's config out of the tests
 
-from tpotctl import bootstrap, cli, ops  # noqa: E402
+from tpotctl import bootstrap, cli, migration, ops  # noqa: E402
 
 try:
     import yaml
@@ -176,6 +176,53 @@ class LauncherTest(unittest.TestCase):
         with mock.patch.object(bootstrap, "ensure", return_value="/venv/bin/python3"), \
                 mock.patch.object(bootstrap, "reexec", return_value=130):
             self.assertEqual(self.launch("ps")[0], 130)
+
+    def test_migration_validation_bypasses_the_manager_venv(self):
+        source = {
+            "release": "24.04.1",
+            "commit": "a" * 40,
+            "role": "HIVE",
+            "edition": "STANDARD",
+            "os_id": "debian",
+            "os_version": "12",
+            "architecture": "amd64",
+            "userland_bits": 64,
+            "elasticsearch_version": None,
+            "kibana_version": None,
+            "image_digests": {"tpotinit": "sha256:" + "b" * 64},
+            "data_path": "/data/tpot",
+        }
+        with tempfile.TemporaryDirectory(prefix="tpot-launcher-migration-") as temp:
+            payload = os.path.join(temp, "source.env")
+            package = os.path.join(temp, "migration.tar")
+            with open(payload, "wb") as handle:
+                handle.write(b"TPOT_TYPE=HIVE\n")
+            migration.create_package(package, source, ["configuration"],
+                                     {"configuration/.env": payload})
+            with mock.patch.object(bootstrap, "ensure", side_effect=AssertionError("venv must not be used")):
+                code, err = self.launch("migrate", "validate", package)
+        self.assertEqual(code, 0, err)
+
+    def test_migration_help_bypasses_the_manager_venv(self):
+        import runpy
+
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(sys, "argv", ["tpot", "migrate", "--help"]), \
+                mock.patch.object(sys, "path", list(sys.path)), mock.patch.dict(os.environ), \
+                mock.patch("sys.platform", "darwin"), mock.patch.object(os, "geteuid", return_value=1000,
+                                                                         create=True), \
+                mock.patch("sys.stdout", stdout), mock.patch("sys.stderr", stderr), \
+                mock.patch.object(bootstrap, "ensure", side_effect=AssertionError("venv must not be used")):
+            try:
+                runpy.run_path(self.LAUNCHER, run_name="__main__")
+            except SystemExit as stop:
+                code = stop.code
+            else:
+                code = 0
+        self.assertEqual(code, 0, stderr.getvalue())
+        self.assertIn("inspect", stdout.getvalue())
+        self.assertIn("export", stdout.getvalue())
+        self.assertIn("validate", stdout.getvalue())
 
 
 class BootstrapTest(unittest.TestCase):
@@ -509,6 +556,164 @@ class LinuxHostTest(unittest.TestCase):
             self.assertFalse(ops.linux_host())
 
 
+class UpdatePlatformTest(unittest.TestCase):
+    """What the Update & backup page says before update.sh refuses: the rules and texts of its
+    fuCHECK_PLATFORM / fuCHECK_HOST_PLATFORM and fuCHECK_MIGRATION_HOLD, the cases of platform_cases.json."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="tpot-update-platform-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = os.path.realpath(self.temp.name)
+
+    @staticmethod
+    def update_sh():
+        with open(os.path.join(cli.REPO_DIR, "update.sh"), encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_update_refusal_matches_platform_cases(self):
+        with open(os.path.join(cli.REPO_DIR, "tpotctl", "tests", "platform_cases.json"), encoding="utf-8") as handle:
+            cases = [case for case in json.load(handle) if case["operation"] == "update"]
+        with open(os.path.join(cli.REPO_DIR, "version"), encoding="utf-8") as handle:
+            target = handle.read().strip()
+        self.assertGreater(len(cases), 5)
+        for case in cases:
+            with self.subTest(case=case["name"]):
+                refusal = ops.update_refusal(case["os_id"], "" if case["os_major"] is None else str(case["os_major"]),
+                                             case["machine"], str(case["userland_bits"]), case["raspberry_pi_os"],
+                                             case["edition"], case["installed_release"], target)
+                if case["expected"] == "allow":
+                    self.assertEqual(refusal, "")
+                else:
+                    self.assertIn(refusal, [text.format(os_id=case["os_id"]) for text in ops.UPDATE_REFUSALS])
+
+    def test_update_refusal_texts_are_those_of_update_sh(self):
+        script = self.update_sh()
+        for text in ops.UPDATE_REFUSALS:
+            with self.subTest(text=text):
+                self.assertIn(f'myWHY="{text.format(os_id="${myOS_ID:-an unknown OS}")}"', script)
+        for hint in ops.MIGRATION_HINTS + (ops.MIGRATION_BACKUP_HINT, ops.UPDATE_BACKUP_HINT):
+            self.assertIn(f'fuUI_HINT "{hint}"', script)
+        self.assertIn(f'fuUI_ERROR "{ops.MIGRATION_HELD.format(guard="${myMIGRATION_GUARD}")}"', script)
+        self.assertEqual(ops.update_refusal("", "13", "x86_64", "64", False, "STANDARD", "24.04.1", "24.04.2"),
+                         "Regular T-Pot updates are supported only on Debian; this host reports an unknown OS.")
+        # the other cases of the Debian 12 transition, which platform_cases.json cannot name
+        self.assertEqual(ops.update_refusal("debian", "12", "x86_64", "64", False, "STANDARD", "24.04.1", "27.04.0"),
+                         "Debian 12 is qualified only for the T-Pot 24.04.2 transition.")
+        self.assertEqual(ops.update_refusal("debian", "14", "x86_64", "64", False, "STANDARD", "24.04.1", "24.04.2"),
+                         ops.UPDATE_REFUSALS[-1])
+
+    def write(self, name, text):
+        path = os.path.join(self.root, name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        return path
+
+    def test_update_platform_reads_the_host(self):
+        repo = os.path.join(self.root, "tpotce")
+        self.write("tpotce/version", " 24.04.2\n")
+        self.write("tpotce/.env", "TPOT_VERSION=24.04.1\nTPOT_DOCKER_COMPOSE=./compose/mine.yml\n")
+        self.write("tpotce/compose/mine.yml", "# my own comment\n# T-Pot: MOBILE\nservices: {}\n")
+        bookworm = self.write("bookworm", "NAME=\"Debian GNU/Linux\"\nID=\"debian\"\nVERSION_ID='12'\n")
+        trixie = self.write("trixie", "ID=debian\nVERSION_ID=\"13\"\n")
+        ubuntu = self.write("ubuntu", "ID=ubuntu\nVERSION_ID=\"24.04\"\n")
+        pi = os.path.join(self.root, "rpi-issue")
+
+        def platform_of(release, machine="aarch64", bits=64):
+            return ops.update_platform(repo, os_release=release, rpi_issue=pi, machine=machine, bits=bits)
+
+        # no marker: a Debian 12 with the MOBILE edition is fine, the transition is named
+        bookworm_mobile = platform_of(bookworm)
+        self.assertEqual(bookworm_mobile.refusal, "")
+        self.assertIn("24.04.2", bookworm_mobile.transition)
+        self.assertIn("Debian 13", bookworm_mobile.transition)
+        self.assertEqual(platform_of(trixie), ops.UpdatePlatform("", ""))
+        # as update.sh: the marker counts when it is there, empty or not (installer.is_raspberry_pi_os says
+        # None for an empty one, that must not mean "no Pi")
+        self.write("rpi-issue", "")
+        self.assertEqual(platform_of(bookworm).refusal, "")
+        self.write("tpotce/compose/mine.yml", "# T-Pot: STANDARD\nservices: {}\n")
+        self.assertEqual(platform_of(bookworm).refusal, "Raspberry Pi OS is supported for T-Pot Mobile only.")
+        self.assertEqual(platform_of(bookworm).transition, "")
+        os.unlink(pi)
+        self.assertEqual(platform_of(ubuntu).refusal,
+                         "Regular T-Pot updates are supported only on Debian; this host reports ubuntu.")
+        self.assertEqual(platform_of(os.path.join(self.root, "missing")).refusal,
+                         "Regular T-Pot updates are supported only on Debian; this host reports an unknown OS.")
+        self.assertEqual(platform_of(trixie, machine="armv7l").refusal,
+                         "T-Pot updates require a 64-bit Debian userland on amd64 or arm64.")
+        self.assertEqual(platform_of(trixie, bits=32).refusal,
+                         "T-Pot updates require a 64-bit Debian userland on amd64 or arm64.")
+        # the installed release comes from .env, the target from the file version
+        self.write("tpotce/.env", "TPOT_VERSION=24.04.0\nTPOT_DOCKER_COMPOSE=./compose/mine.yml\n")
+        self.assertEqual(platform_of(bookworm).refusal,
+                         "Debian 12 updates require an existing T-Pot 24.04.1 or 24.04.2 installation.")
+        self.write("tpotce/.env", "TPOT_VERSION=24.04.1\nTPOT_DOCKER_COMPOSE=./compose/mine.yml\n")
+        self.write("tpotce/version", "27.04.0\n")
+        self.assertEqual(platform_of(bookworm).refusal, "Debian 12 is qualified only for the T-Pot 24.04.2 transition.")
+        # without machine and bits: this host's
+        with mock.patch("platform.machine", return_value="armv7l"):
+            self.assertEqual(ops.update_platform(repo, os_release=trixie, rpi_issue=pi).refusal,
+                             "T-Pot updates require a 64-bit Debian userland on amd64 or arm64.")
+
+    def test_update_platform_reads_the_installation_as_update_sh(self):
+        # the T-Pot Manager of a 24.04.2 tools checkout on a 24.04.1 host (24.04.1 has none): update.sh takes
+        # .env and the compose file of $HOME/tpotce, the target from the file version of its own checkout
+        tools = os.path.join(self.root, "tools")
+        installed = os.path.join(self.root, "tpotce")
+        self.write("tools/version", "24.04.2\n")
+        self.write("tpotce/version", "24.04.1\n")
+        self.write("tpotce/.env", "TPOT_VERSION=24.04.1\n")
+        self.write("tpotce/docker-compose.yml", "# T-Pot: MOBILE\nservices: {}\n")
+        bookworm = self.write("bookworm", "ID=debian\nVERSION_ID=12\n")
+        self.write("rpi-issue", "Raspberry Pi reference\n")
+        found = ops.update_platform(tools, os_release=bookworm, rpi_issue=os.path.join(self.root, "rpi-issue"),
+                                    machine="aarch64", bits=64, installed_dir=installed)
+        self.assertEqual(found, ops.UpdatePlatform("", ops.DEBIAN_12_TRANSITION))
+        # the tools checkout alone has no installation: no edition (update.sh asks for Mobile first), no release
+        self.assertEqual(ops.update_platform(tools, os_release=bookworm, rpi_issue=os.path.join(self.root, "rpi-issue"),
+                                             machine="aarch64", bits=64).refusal,
+                         "Raspberry Pi OS is supported for T-Pot Mobile only.")
+        self.assertEqual(ops.update_platform(tools, os_release=bookworm, rpi_issue=os.path.join(self.root, "none"),
+                                             machine="aarch64", bits=64).refusal,
+                         "Debian 12 updates require an existing T-Pot 24.04.1 or 24.04.2 installation.")
+        with mock.patch.dict(os.environ, {"HOME": self.root}):
+            self.assertEqual(ops.installation(), installed)
+
+    def test_migration_hold_roles(self):
+        from tpotctl import migration_history as history, migration_runtime as runtime
+        repo = os.path.join(self.root, "tpotce")
+        os.mkdir(repo)
+        guard = os.path.join(self.root, "90-tpot-migration.conf")
+        with mock.patch.dict(os.environ, {"XDG_DATA_HOME": os.path.join(self.root, "state")}):
+            self.assertEqual(ops.migration_hold(repo, guard), "")
+            with open(guard, "w", encoding="utf-8"):
+                pass
+            # a guard without an export journal of this checkout: the target of a migration
+            self.assertEqual(ops.migration_hold(repo, guard), "held")
+            state = history.export_state(repo)
+            identity = {"operation": "export", "source": repo}
+            with runtime.Journal(os.path.dirname(state), identity) as journal:
+                self.assertEqual(ops.migration_hold(repo, guard), "held")      # new: the source never stopped
+                journal.record("held")
+            self.assertEqual(ops.migration_hold(repo, guard), "source")
+            os.unlink(guard)
+            os.symlink(os.path.join(self.root, "gone"), guard)                # a dangling link holds too
+            self.assertEqual(ops.migration_hold(repo, guard), "source")
+            with runtime.Journal(os.path.dirname(state), identity) as journal:
+                journal.record("released")
+            self.assertEqual(ops.migration_hold(repo, guard), "held")
+            # a journal that is not one: held, the resume is not offered
+            os.unlink(state)
+            os.symlink(self.write("foreign.json", json.dumps({"phase": "held"})), state)
+            self.assertEqual(ops.migration_hold(repo, guard), "held")
+            os.unlink(state)
+            with open(state, "w", encoding="utf-8") as handle:
+                handle.write("{not json")
+            os.chmod(state, 0o600)
+            self.assertEqual(ops.migration_hold(repo, guard), "held")
+
+
 class CliTest(unittest.TestCase):
 
     def setUp(self):
@@ -623,7 +828,7 @@ class CliTest(unittest.TestCase):
 
     def test_help_lists_every_command(self):
         text = cli.build_parser().format_help()
-        for command in ("status", "ps", "images", "start", "stop", "restart", "update", "restore",
+        for command in ("status", "ps", "images", "start", "stop", "restart", "update", "restore", "migrate",
                         "customize", "setup"):
             self.assertIn(command, text)
         self.assertIn("was: dps", text)

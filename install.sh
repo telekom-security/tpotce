@@ -20,7 +20,7 @@ question." \
   i - mini      (requires -u and -p / -P)
   m - mobile    (no user/pass required)
   t - tarpit    (requires -u and -p / -P)
-With -c only h (a HIVE) or s (a SENSOR)." \
+With -c use h (HIVE), s (SENSOR) or m (MOBILE)." \
     --opt "-u <webuser>" "Web interface username (required for h/l/i/t)" \
     --opt "-p <password>" "Web interface password (required for h/l/i/t)" \
     --opt "-P <file>" "Read the web interface password from a file, - for stdin.
@@ -36,6 +36,9 @@ Save install.sh locally first; the Manager does not run as root." \
     --opt "--user-password-file <file>" "Private file (chmod 600) with a new account password, needed
 for secure unattended installation when the account has no
 usable password. It also applies to SSH password logins." \
+    --opt "--migration [--migration-yes]" "Install from a privately staged tpot migrate import package.
+Review its report and confirm before applying settings and identities.
+--migration-yes confirms the report for unattended runs." \
     --opt "-c <file>" "Install this compose file (i.e. from tpot customize) instead
 of an edition." \
     --opt "-b <branch>" "Branch, tag or commit to install from. Default: the branch
@@ -2705,6 +2708,8 @@ root_handover() {
   myCHILD_ARGS=(-b "${myTPOT_BRANCH}" -r "${myTPOT_REPO_URL}")
   [ -z "${myUNATTENDED}" ] || myCHILD_ARGS+=(-s)
   [ -z "${myTPOT_TYPE}" ] || myCHILD_ARGS+=(-t "${myTPOT_TYPE}")
+  [ -z "${myMIGRATION}" ] || myCHILD_ARGS+=(--migration)
+  [ -z "${myMIGRATION_YES}" ] || myCHILD_ARGS+=(--migration-yes)
   [ -z "${myWEB_USER}" ] || myCHILD_ARGS+=(-u "${myWEB_USER}")
   [ -z "${myCLASSIC}" ] || myCHILD_ARGS+=(-n)
   [ -z "${myMARKS}" ] || myCHILD_ARGS+=(-M)
@@ -2730,13 +2735,18 @@ root_handover() {
       && chmod 400 "${myROOT_STAGE}/web-password" || exit 1
     myCHILD_ARGS+=(-P "${myROOT_STAGE}/web-password")
   fi
+  myROOT_XDG_ARGS=()
+  if [ -n "${myMIGRATION}" ] && [ -n "${XDG_DATA_HOME:-}" ]; then
+    myROOT_XDG_ARGS+=("XDG_DATA_HOME=${XDG_DATA_HOME}")
+  fi
   [ -z "${myTRACE}" ] || set -x
   # Explicit stdin keeps terminal questions attached despite the asynchronous wait.
   (
     cd "${myHOME}" || exit 1
     exec runuser -u "${myNAME}" -- env -u XDG_DATA_HOME -u XDG_CONFIG_HOME -u XDG_CACHE_HOME \
       -u XDG_STATE_HOME -u XDG_RUNTIME_DIR -u SUDO_USER -u SUDO_UID -u SUDO_GID -u SUDO_COMMAND \
-      -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV HOME="${myHOME}" USER="${myNAME}" LOGNAME="${myNAME}" \
+      -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV "${myROOT_XDG_ARGS[@]}" \
+      HOME="${myHOME}" USER="${myNAME}" LOGNAME="${myNAME}" \
       bash "${myROOT_STAGE}/install.sh" "${myCHILD_ARGS[@]}"
   ) <&0 &
   myROOT_CHILD=$!
@@ -2871,6 +2881,39 @@ password_weakness() {
   [ "${#1}" -ge 12 ] || echo "shorter than 12 characters"
 }
 
+fuMIGRATION() {
+  # fuMIGRATION <source|prepare|apply|hold|history|finish>: hold and history need sudo, with -B by its file
+  local myACTION="$1"
+  python3 - "${HOME}/tpotce" "${myMIGRATION_STATE}" "${myACTION}" "${myBECOME_FILE}" <<'PY'
+import json
+import sys
+sys.path.insert(0, sys.argv[1])
+from tpotctl.migration import MigrationError
+from tpotctl.migration_import import apply_import, finish_import, pending_source, prepare_import
+try:
+    action = sys.argv[3]
+    if action == "source":
+        print(pending_source(sys.argv[1], sys.argv[2])["role"])
+    elif action == "prepare":
+        print(json.dumps(prepare_import(sys.argv[1], sys.argv[2]), sort_keys=True))
+    elif action == "apply":
+        apply_import(sys.argv[1], sys.argv[2])
+    elif action == "hold":
+        from tpotctl.migration_history import hold_history
+        print("held" if hold_history(sys.argv[1], sys.argv[2], sys.argv[4] or None) else "none")
+    elif action == "history":
+        from tpotctl.migration_history import restore_history
+        print(json.dumps(restore_history(sys.argv[1], sys.argv[2], sys.argv[4] or None), sort_keys=True))
+    elif action == "finish":
+        finish_import(sys.argv[2])
+    else:
+        raise MigrationError("unknown installer migration action")
+except (MigrationError, OSError, ValueError, UnicodeError) as exc:
+    print(f"Migration import failed: {exc}", file=sys.stderr)
+    raise SystemExit(1)
+PY
+}
+
 ask_type() {
   # the classic questions, before anything is installed
   [ -n "${myTPOT_TYPE}" ] && return
@@ -2879,12 +2922,13 @@ ask_type() {
     "Sensor - honeypots only, sends to a HIVE (no web UI, no Elastic Stack):s" \
     "LLM - LLM based honeypots Beelzebub and Galah, needs Ollama or ChatGPT:l" \
     "Mini - 30+ honeypots with just a couple of honeypot daemons:i" \
-    "Mobile - everything to run T-Pot Mobile (available separately):m" \
+    "Mobile - local honeypot data, no web UI or HIVE needed:m" \
     "Tarpit - endless data for attackers, bots and scanners, with ddospot:t") || exit 1
   validate_type
 }
 
 ask_web_user() {
+  [ -z "${myMIGRATION}" ] || return
   [[ "${myTPOT_TYPE}" =~ ^[hlit]$ ]] || return
   echo
   fuUI_INFO "T-Pot User Configuration ..."
@@ -2935,6 +2979,12 @@ myUSER_PASSWORD_FILE=""
 myNEEDS_USER_PASSWORD=""
 mySUDO_MODE="secure"
 myCUSTOM_COMPOSE=""
+myMIGRATION=""
+myMIGRATION_YES=""
+myMIGRATION_SOURCE_ROLE=""
+myMIGRATION_STATE=""
+myMIGRATION_REPORT=""
+myMIGRATION_HISTORY=""
 myCLASSIC=""
 myMARKS=""
 myNO_AUTO_UPDATES=""
@@ -2953,6 +3003,8 @@ while getopts ":sb:r:t:u:p:P:B:c:UnMh-:" opt; do
     -)
       case "${OPTARG}" in
         sudo-nopasswd) mySUDO_MODE="convenient" ;;
+        migration) myMIGRATION="y" ;;
+        migration-yes) myMIGRATION_YES="y" ;;
         user|user-password-file|user=*|user-password-file=*)
           myKEY="${OPTARG%%=*}"
           case "${OPTARG}" in
@@ -3025,6 +3077,16 @@ done
 trap 'myEXIT=$?; cleanup_password_files || myEXIT=1; exit "${myEXIT}"' EXIT
 trap 'exit 130' INT TERM HUP
 
+if [ -n "${myMIGRATION_YES}" ] && [ -z "${myMIGRATION}" ]; then
+  usage_error "--migration-yes requires --migration."
+fi
+if [ -n "${myMIGRATION}" ]; then
+  if [ -n "${myTPOT_TYPE}${myCUSTOM_COMPOSE}${myWEB_USER}${myWEB_PW}${myWEB_PW_FILE}" ]; then
+    usage_error "--migration selects the installation type, Compose file and web credentials from its package."
+  fi
+  myCLASSIC="y"
+fi
+
 [ "${myWEB_PW_FILE}" != "-" ] || [ "${myBECOME_FILE}" != "-" ] \
   || usage_error "Only one password can be read from stdin; use a file for the other one."
 if [ "${myBECOME_FILE}" = "-" ]; then
@@ -3043,18 +3105,18 @@ fi
 [ -n "${myWEB_PW_FILE}" ] && read_password_file "${myWEB_PW_FILE}"
 
 # -s requires -t
-if [[ "$myUNATTENDED" == "y" && -z "$myTPOT_TYPE" ]]; then
+if [[ "$myUNATTENDED" == "y" && -z "$myTPOT_TYPE" && -z "$myMIGRATION" ]]; then
   usage_error "-t is required when using -s to suppress interaction."
 fi
 
 # Determine if user/pass are required based on install type
-if [[ "$myUNATTENDED" == "y" && "$myTPOT_TYPE" =~ ^[hlit]$ ]]; then
+if [[ "$myUNATTENDED" == "y" && "$myTPOT_TYPE" =~ ^[hlit]$ && -z "$myMIGRATION" ]]; then
   [[ -n "$myWEB_USER" && -n "$myWEB_PW" ]] || usage_error "-u and -p (or -P) are required for installation type '$myTPOT_TYPE'."
 fi
 
 if [ -n "${myCUSTOM_COMPOSE}" ];
   then
-    [[ "${myTPOT_TYPE}" =~ ^[hs]$ ]] || [ -z "${myTPOT_TYPE}" ] || usage_error "With -c the type is h (a HIVE) or s (a SENSOR)."
+    [[ "${myTPOT_TYPE}" =~ ^[hsm]$ ]] || [ -z "${myTPOT_TYPE}" ] || usage_error "With -c the type is h (HIVE), s (SENSOR) or m (MOBILE)."
     [ -f "${myCUSTOM_COMPOSE}" ] || usage_error "${myCUSTOM_COMPOSE} does not exist."
     myCUSTOM_COMPOSE=$(cd "$(dirname "${myCUSTOM_COMPOSE}")" && pwd)/$(basename "${myCUSTOM_COMPOSE}")
 fi
@@ -3077,6 +3139,7 @@ myUSER=$(whoami)
 myLOG="${HOME}/install_tpot_prepare.log"
 myPULL_LOG="${HOME}/install_tpot_pull.log"
 myTPOT_CONF_FILE="${HOME}/tpotce/.env"
+myMIGRATION_STATE="${XDG_DATA_HOME:-${HOME}/.local/share}/tpotce/migration"
 # git and the Python venv module: the assistant (tpot install) runs before the
 # playbook, from a clone the installer makes itself
 myPACKAGES_DEBIAN="ansible apache2-utils cracklib-runtime git python3-venv wget"
@@ -3088,6 +3151,42 @@ myPACKAGES_OPENSUSE="ansible apache2-utils cracklib git python3 wget"
 # service on 127.0.0.1 conflicts with a container publishing the same port on
 # 0.0.0.0, so a loopback listener counts as well.
 myCONFLICT_PORTS="tcp/25 tcp/53 udp/53"
+
+fuIS_RPI_OS() {
+  local myFILE="${1:-/etc/rpi-issue}"
+  [ -e "${myFILE}" ] || return 1
+  [ -f "${myFILE}" ] && [ -r "${myFILE}" ] && [ -s "${myFILE}" ] || return 2
+  return 0
+}
+
+fuCHECK_INSTALL_PLATFORM() {
+  local myOS_ID="$1" myOS_NAME="$2" myOS_MAJOR="$3" myMACHINE="$4" myBITS="$5"
+  local myPI_OS="$6" myEDITION="$7" myCUSTOM="$8" myWHY=""
+  if [ "${myOS_ID}" != "debian" ] || [ "${myOS_NAME}" != "Debian GNU/Linux" ];
+    then
+      myWHY="Only the following distributions are supported: Debian GNU/Linux."
+  elif [ "${myOS_MAJOR}" != "13" ];
+    then
+      myWHY="The installer requires Debian GNU/Linux 13, this system runs ${myOS_MAJOR:-an unknown version}."
+  elif [ "${myBITS}" != "64" ] || ! [[ "${myMACHINE}" =~ ^(x86_64|amd64|aarch64|arm64)$ ]];
+    then
+      myWHY="T-Pot needs a 64-bit system (x86-64 or arm64), this one is ${myMACHINE:-unknown}${myBITS:+ with a ${myBITS}-bit userland}."
+  elif [ "${myPI_OS}" = "1" ] && ! [[ "${myMACHINE}" =~ ^(aarch64|arm64)$ ]];
+    then
+      myWHY="Raspberry Pi OS Lite for T-Pot Mobile requires a 64-bit arm64 system."
+  elif [ "${myPI_OS}" = "1" ] && [ -n "${myEDITION}" ] \
+       && { [ "${myEDITION}" != "m" ] || [ "${myCUSTOM}" = "1" ]; };
+    then
+      myWHY="Raspberry Pi OS is supported for the built-in T-Pot Mobile edition only."
+  fi
+  if [ -n "${myWHY}" ];
+    then
+      fuUI_ERROR "${myWHY}"
+      fuUI_INFO "See the T-Pot README for supported host platforms and editions."
+      return 1
+  fi
+  return 0
+}
 
 fuUI_INIT
 
@@ -3109,15 +3208,6 @@ fi
 # aarch64 there, getconf LONG_BIT 32).
 myMACHINE=$(uname -m 2>/dev/null)
 myBITS=$(getconf LONG_BIT 2>/dev/null)
-if [[ ! "${myMACHINE}" =~ ^(x86_64|amd64|aarch64|arm64)$ ]] || [ "${myBITS:-64}" != "64" ];
-  then
-    fuUI_ERROR "T-Pot needs a 64-bit system (x86-64 or arm64), this one is ${myMACHINE:-unknown}${myBITS:+ with a ${myBITS}-bit userland}."
-    fuUI_INFO "32-bit systems are not supported. For T-Pot Mobile use Raspberry Pi OS Lite (64-bit)."
-    fuUI_INFO "See the T-Pot README for host requirements and support tiers."
-    echo
-    mark_failed
-    exit 1
-fi
 
 # WSL2 is no T-Pot host: its Docker sits behind the network and the firewall of Windows, the
 # honeypots would not see the attackers. Its kernel says so (uname -r: ...-microsoft-standard-WSL2).
@@ -3130,57 +3220,54 @@ if [[ "$(uname -r 2>/dev/null)" =~ [Mm]icrosoft ]];
     exit 1
 fi
 
-# Accepted distributions include best-effort hosts; support tiers are reported below. Raspberry Pi
-# OS (64-bit) is "Debian GNU/Linux", only its 32-bit variant calls itself Raspbian.
-mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Red Hat Enterprise Linux" "Rocky Linux" "Ubuntu")
-# no /etc/os-release (macOS): no distribution, the message below says which ones T-Pot runs on
+# Debian and Raspberry Pi OS (identified by /etc/rpi-issue) are the only supported host platforms.
+mySUPPORTED_DISTRIBUTIONS=("Debian GNU/Linux")
 myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release 2>/dev/null | tr -d '"')
-
-if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[@]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
-  then
-    # the list in words: "a, b and c", from the array, so the message names every one of them
-    myLIST=$(printf '%s, ' "${mySUPPORTED_DISTRIBUTIONS[@]:0:${#mySUPPORTED_DISTRIBUTIONS[@]}-1}")
-    fuUI_ERROR "Only the following distributions are supported: ${myLIST%, } and ${mySUPPORTED_DISTRIBUTIONS[${#mySUPPORTED_DISTRIBUTIONS[@]}-1]}."
-    fuUI_INFO "Debian is the preferred T-Pot platform. See the T-Pot README for host requirements and support tiers."
-    echo
-    mark_failed
-    exit 1
-fi
-
-# Check if running on a supported distribution version. T-Pot follows the
-# current release of each distribution, the packages and repositories it uses
-# are only available there. openSUSE Tumbleweed rolls and is not pinned.
+myCURRENT_OS_ID=$(awk -F= '/^ID=/{print $2}' /etc/os-release 2>/dev/null | tr -d '"')
 myVERSION_ID=$(awk -F= '/^VERSION_ID/{print $2}' /etc/os-release 2>/dev/null | tr -d '"')
 case ${myCURRENT_DISTRIBUTION} in
-  "AlmaLinux"|"Red Hat Enterprise Linux"|"Rocky Linux")
-    mySUPPORTED_VERSION="10"
-    myCURRENT_VERSION="${myVERSION_ID%%.*}"
-    ;;
-  "Fedora Linux")
-    mySUPPORTED_VERSION="44"
-    myCURRENT_VERSION="${myVERSION_ID%%.*}"
-    ;;
   "Debian GNU/Linux")
     mySUPPORTED_VERSION="13"
     myCURRENT_VERSION="${myVERSION_ID%%.*}"
     ;;
-  "Ubuntu")
-    # Ubuntu releases twice a year, its version is major and minor
-    mySUPPORTED_VERSION="26.04"
-    myCURRENT_VERSION="${myVERSION_ID}"
-    ;;
   *)
     mySUPPORTED_VERSION=""
+    myCURRENT_VERSION="${myVERSION_ID%%.*}"
     ;;
 esac
 
-if [ -n "${mySUPPORTED_VERSION}" ] && [ "${myCURRENT_VERSION}" != "${mySUPPORTED_VERSION}" ];
+myRPI_OS=0
+if fuIS_RPI_OS;
   then
-    fuUI_ERROR "The installer requires ${myCURRENT_DISTRIBUTION} ${mySUPPORTED_VERSION}, this system runs ${myCURRENT_VERSION}."
-    fuUI_INFO "Please install the required OS version. See the T-Pot README for host requirements and support tiers."
-    echo
+    myRPI_OS=1
+  else
+    myRPI_STATUS=$?
+    if [ "${myRPI_STATUS}" -ne 1 ];
+      then
+        fuUI_ERROR "/etc/rpi-issue exists but is unreadable or empty; the host platform cannot be verified."
+        echo
+        mark_failed
+        exit 1
+    fi
+fi
+
+if ! fuCHECK_INSTALL_PLATFORM "${myCURRENT_OS_ID}" "${myCURRENT_DISTRIBUTION}" "${myCURRENT_VERSION}" \
+                               "${myMACHINE}" "${myBITS}" "${myRPI_OS}" "" "0";
+  then
     mark_failed
     exit 1
+fi
+
+if [ -n "${myMIGRATION}" ] && [ "${EUID}" -ne 0 ]; then
+    myMIGRATION_SOURCE_ROLE=$(fuMIGRATION source) || install_failed \
+        "The staged migration package is not valid for this target" \
+        "Run 'tpot migrate import FILE' from the target checkout, then retry with --migration"
+    case "${myMIGRATION_SOURCE_ROLE}" in
+      HIVE) myTPOT_TYPE="h" ;;
+      SENSOR) myTPOT_TYPE="s" ;;
+      MOBILE) myTPOT_TYPE="m" ;;
+      *) install_failed "The staged migration package has an unsupported role" "Validate and restage the package" ;;
+    esac
 fi
 
 # The containers of T-Pot run as the user and group tpot (uid and gid 2000): stop before anything is
@@ -3210,7 +3297,7 @@ myUI_VERSION=$(install_version)
 [ -z "${myMARKS}" ] && fuUI_BANNER "Installer" "This script will now install T-Pot and all of its dependencies." \
   "Source: ${myTPOT_REPO_URL} at ${myTPOT_BRANCH}" "${myCURRENT_DISTRIBUTION} ${myVERSION_ID}"
 
-fuUI_INFO "Debian is the preferred T-Pot platform. Raspberry Pi OS remains supported for T-Pot Mobile."
+fuUI_INFO "New installations require Debian GNU/Linux 13. Raspberry Pi OS is supported for the built-in T-Pot Mobile edition."
 case ${myCURRENT_DISTRIBUTION} in
   "Debian GNU/Linux") ;;
   *)
@@ -3286,6 +3373,15 @@ fi
 
 # The questions come before anything is installed, the rest runs on its own.
 ask_type
+myCUSTOM_COMPOSE_SET=0
+[ -z "${myCUSTOM_COMPOSE}" ] || myCUSTOM_COMPOSE_SET=1
+if ! fuCHECK_INSTALL_PLATFORM "${myCURRENT_OS_ID}" "${myCURRENT_DISTRIBUTION}" "${myCURRENT_VERSION}" \
+                               "${myMACHINE}" "${myBITS}" "${myRPI_OS}" "${myTPOT_TYPE}" \
+                               "${myCUSTOM_COMPOSE_SET}";
+  then
+    mark_failed
+    exit 1
+fi
 ask_web_user
 ask_sudo_mode
 check_user_password
@@ -3324,7 +3420,7 @@ get_packages
 check_new_password_strength
 
 # Define tag for Ansible
-myANSIBLE_DISTRIBUTIONS=("Fedora Linux" "Debian GNU/Linux" "Rocky Linux" "Red Hat Enterprise Linux")
+myANSIBLE_DISTRIBUTIONS=("Debian GNU/Linux")
 if [[ "${myANSIBLE_DISTRIBUTIONS[@]}" =~ "${myCURRENT_DISTRIBUTION}" ]];
   then
     # special case AGAIN, /etc/os-release doesn't match Ansible's tagging conventions
@@ -3353,6 +3449,16 @@ if [ ! -f "${HOME}/tpotce/installer/install/tpot.yml" ];
     fi
 fi
 myANSIBLE_TPOT_PLAYBOOK="${HOME}/tpotce/installer/install/tpot.yml"
+if [ -n "${myCUSTOM_COMPOSE}" ]; then
+  case "${myTPOT_TYPE}" in
+    m) myCUSTOM_ROLE=MOBILE ;;
+    s) myCUSTOM_ROLE=SENSOR ;;
+    h) myCUSTOM_ROLE=HIVE ;;
+    *) usage_error "With -c choose HIVE, SENSOR or MOBILE." ;;
+  esac
+  python3 "${HOME}/tpotce/compose/customizer.py" --check-install "${myCUSTOM_COMPOSE}" --tpot-type "${myCUSTOM_ROLE}" \
+    || install_failed "Custom Compose does not match the installation role" "Review the file and type above"
+fi
 myHOOKS_WARNING=""
 if [ ! -f "${HOME}/tpotce/tpotctl/git_hooks.py" ];
   then
@@ -3362,6 +3468,60 @@ elif ! python3 "${HOME}/tpotce/tpotctl/git_hooks.py" install --root "${HOME}/tpo
     myHOOKS_WARNING="The T-Pot Git freshness hooks could not be installed; other Git hooks were left alone."
 fi
 [ -z "${myHOOKS_WARNING}" ] || fuUI_WARN "${myHOOKS_WARNING}"
+if [ -n "${myMIGRATION}" ]; then
+  myMIGRATION_REPORT=$(fuMIGRATION prepare) || install_failed \
+    "The migration package could not be prepared" \
+    "Review the error above, correct the package or target, then run the installer again"
+  myMIGRATION_LINES=$(python3 -c '
+import json, sys
+report = json.loads(sys.argv[1])
+print("Source role: " + report["source_role"])
+for line in report.get("compose_report", []):
+    print("Compose: " + line)
+for key in report.get("settings_skipped", []):
+    print("Setting not imported: " + key)
+if not report.get("settings_skipped"):
+    print("All supported source settings are eligible for import.")
+history = report.get("history")
+if history:
+    print("Elastic history: {indices} indices, {documents} documents, {first} to {last}".format(**history))
+    print("Elasticsearch upgrade route: " + " -> ".join(history["route"]))
+    print("Kibana: {objects} saved objects in {spaces} space(s)".format(**history))
+    if history["ignored_indices"]:
+        print("Indices not migrated: {ignored_indices}".format(**history))
+    print("Target retention: events {events} days, sensor history {sensor_history} days".format(
+        **history["retention"]))
+    print("Restored indices age from their creation on the source, ILM deletes them past this retention.")
+    print("If one is older at the first start, T-Pot keeps all of them until you apply the retention"
+          " with tpot elastic retention --force (it asks first).")
+' "${myMIGRATION_REPORT}") || install_failed "The migration report is invalid" \
+    "Keep the staged package and review the installer output"
+  myMIGRATION_HISTORY=$(python3 -c 'import json, sys; print("y" if json.loads(sys.argv[1]).get("history") else "")' \
+    "${myMIGRATION_REPORT}") || install_failed "The migration report is invalid" \
+    "Keep the staged package and review the installer output"
+  fuUI_INFO "Migration report:"
+  while IFS= read -r myREPORT_LINE; do
+    [ -n "${myREPORT_LINE}" ] && fuUI_INFO "${myREPORT_LINE}"
+  done <<< "${myMIGRATION_LINES}"
+  if [ -z "${myMIGRATION_YES}" ]; then
+    if [ ! -t 0 ] || [ ! -t 1 ]; then
+      install_failed "The migration report needs explicit confirmation" \
+        "Review it at a terminal or rerun with --migration-yes"
+    fi
+    if ! fuUI_CONFIRM "Apply these migration settings and identities?" "Apply" "Cancel"; then
+      fuUI_WARN "Migration was not applied; its private package remains staged."
+      exit 0
+    fi
+  fi
+  fuMIGRATION apply || install_failed "The prepared migration could not be applied" \
+    "Keep the staged package and review the target before retrying"
+  # the guard keeps tpot.service from starting (playbook, reboot) until the history is restored
+  if [ -n "${myMIGRATION_HISTORY}" ]; then
+    fuUI_INFO "Holding tpot.service until the Elastic history is restored ..."
+    fuMIGRATION hold >/dev/null || install_failed "T-Pot could not be held for the Elastic history restore" \
+      "Review the error above; the migration remains staged, run the installer again"
+  fi
+fi
 if [ ! -f "${myTPOT_CONF_FILE}" ];
   then
     install -m 600 "${HOME}/tpotce/env.example" "${myTPOT_CONF_FILE}" \
@@ -3379,6 +3539,10 @@ if [ -f "${HOME}/tpotce/tpotctl/generated.py" ];
     fuUI_WARN "This checkout predates generated configuration; source fingerprints are not available."
 fi
 echo
+
+if [ "${myTPOT_TYPE}" = "m" ]; then
+  env_set TPOT_TYPE MOBILE || install_failed "The MOBILE role could not be saved" "Check ${myTPOT_CONF_FILE}"
+fi
 
 # -U before the playbook sets the automatic updates up: they read .env every time they run
 if [ -n "${myNO_AUTO_UPDATES}" ];
@@ -3428,7 +3592,7 @@ fuUI_INFO "Now running T-Pot Ansible Installation Playbook ..."
 echo
 # neither a repository URL nor a git reference contains a space, so the
 # unquoted expansion below splits into exactly four arguments
-myANSIBLE_EXTRA_VARS="-e tpot_repo=${myTPOT_REPO_URL} -e tpot_branch=${myTPOT_BRANCH}"
+myANSIBLE_EXTRA_VARS="-e tpot_repo=${myTPOT_REPO_URL} -e tpot_branch=${myTPOT_BRANCH} -e tpot_install_type=${myTPOT_TYPE}"
 if [ -n "${myMARKS}" ];
   then
     myTASKS=$(ANSIBLE_INJECT_FACT_VARS=False ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local \
@@ -3473,10 +3637,14 @@ case "${myTPOT_TYPE}" in
   m) myTPOT_TYPE="MOBILE"; myEDITION="mobile" ;;
   t) myTPOT_TYPE="HIVE";   myEDITION="tarpit" ;;
 esac
-if [ -n "${myCUSTOM_COMPOSE}" ];
+if [ -n "${myMIGRATION}" ];
+  then
+    fuUI_INFO "Keeping the imported target Compose file."
+elif [ -n "${myCUSTOM_COMPOSE}" ];
   then
     fuUI_INFO "Installing your own compose file ${myCUSTOM_COMPOSE}."
-    [ "${myCUSTOM_COMPOSE}" = "${HOME}/tpotce/docker-compose.yml" ] || cp "${myCUSTOM_COMPOSE}" "${HOME}/tpotce/docker-compose.yml"
+    [ "${myCUSTOM_COMPOSE}" = "${HOME}/tpotce/docker-compose.yml" ] || cp "${myCUSTOM_COMPOSE}" "${HOME}/tpotce/docker-compose.yml" \
+      || install_failed "The custom Compose file could not be installed" "Check the source and destination"
   else
     fuUI_INFO "Installing T-Pot ${myEDITION}."
     cp "${HOME}/tpotce/compose/${myEDITION}.yml" "${HOME}/tpotce/docker-compose.yml"
@@ -3487,7 +3655,12 @@ if [ -f "${HOME}/tpotce/tpotctl/generated.py" ] \
     install_failed "The T-Pot compose file could not be stamped" "Check ${HOME}/tpotce/docker-compose.yml and run the installer again"
 fi
 
-if [ "${myTPOT_TYPE}" == "HIVE" ];
+if [ "${myTPOT_TYPE}" == "HIVE" ] && [ -n "${myMIGRATION}" ];
+  then
+    mark_phase user
+    fuUI_INFO "Preserving the imported HIVE web users."
+    echo
+elif [ "${myTPOT_TYPE}" == "HIVE" ];
   # If T-Pot Type is HIVE write the WebUI username and password
   then
     mark_phase user
@@ -3528,6 +3701,21 @@ if [ "${myRC}" -ne 0 ];
     fuUI_WARN "Not all images could be pulled (see ${myPULL_LOG}), T-Pot tries again when it starts."
 fi
 echo
+if [ -n "${myMIGRATION_HISTORY}" ];
+  then
+    # the restore runs the images of this T-Pot, a start without them would pull them on the fly
+    [ -z "${myPULL_FAILED}" ] || install_failed "The images for the Elastic history restore could not all be pulled" \
+      "T-Pot stays held and the migration remains staged; check ${myPULL_LOG}, then run the installer again"
+    mark_phase history
+    myRC=0
+    fuUI_SPIN "Restoring the Elastic history in maintenance containers, this can take long ..." "${myLOG}" \
+      fuMIGRATION history || myRC=$?
+    [ "${myRC}" -ne 130 ] || install_stopped "Stopped during the Elastic history restore, T-Pot stays held" \
+      "Run the installer again to resume the restore"
+    [ "${myRC}" -eq 0 ] || install_failed "The Elastic history could not be restored" \
+      "T-Pot stays held and the migration remains staged; review ${myLOG}, then run the installer again"
+    fuUI_OK "The Elastic history was restored and verified, tpot.service is released."
+fi
 
 # Show running services
 if [ -z "${myMARKS}" ];
@@ -3563,9 +3751,12 @@ fi
 mark_phase sudo
 if ! install_sudo_mode false; then
   mark_failed
-  fuUI_SUMMARY "The installation needs attention" \
-    "fail:The requested sudo mode could not be applied." \
-    "info:The services are installed; verify the sudo state before disconnecting." \
+  mySUMMARY=("fail:The requested sudo mode could not be applied."
+             "info:The services are installed; verify the sudo state before disconnecting.")
+  # after a reboot T-Pot fills its data folder and a retry can no longer finish the migration
+  [ -z "${myMIGRATION}" ] || mySUMMARY+=("info:The migration package remains staged."
+    "next:Run ./install.sh --migration again before you reboot; it finishes the migration.")
+  fuUI_SUMMARY "The installation needs attention" "${mySUMMARY[@]}" \
     "next:Review ${HOME}/install_tpot.log and the output above."
   exit 1
 fi
@@ -3573,12 +3764,24 @@ fi
 # Done: what is installed and what comes next
 myISO_WARNING=""
 install_iso_complete
+if [ -n "${myMIGRATION}" ] && ! fuMIGRATION finish; then
+  mark_failed
+  fuUI_SUMMARY "T-Pot is installed, migration cleanup needs attention" \
+    "fail:The private migration package could not be removed." \
+    "info:The services are installed; the migration package remains staged." \
+    "next:Review the output above and remove the private stage only after verifying the installation."
+  exit 1
+fi
 mark_phase "done"
 if [ -n "${myCUSTOM_COMPOSE}" ];
   then mySUMMARY=("ok:T-Pot is installed with your own compose file (${myTPOT_TYPE})")
   else mySUMMARY=("ok:T-Pot ${myEDITION} is installed (${myTPOT_TYPE})")
 fi
-[ "${myTPOT_TYPE}" = "HIVE" ] && mySUMMARY+=("ok:The web user ${myWEB_USER} is set up")
+if [ "${myTPOT_TYPE}" = "HIVE" ]; then
+  if [ -n "${myMIGRATION}" ]; then mySUMMARY+=("ok:Imported HIVE web users are preserved")
+    else mySUMMARY+=("ok:The web user ${myWEB_USER} is set up"); fi
+fi
+[ -n "${myMIGRATION_HISTORY}" ] && mySUMMARY+=("ok:The Elastic history and Kibana objects were restored and verified")
 [ -n "${myPULL_FAILED}" ] && mySUMMARY+=("warn:Not all images could be pulled, T-Pot tries again when it starts")
 [ -n "${myHOOKS_WARNING}" ] && mySUMMARY+=("warn:${myHOOKS_WARNING}")
 [ -n "${myISO_WARNING}" ] && mySUMMARY+=("warn:${myISO_WARNING}")

@@ -11,7 +11,7 @@ import tempfile
 import time
 from contextlib import contextmanager
 from functools import wraps
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Set
 from urllib.parse import urlsplit
 from datetime import datetime, timezone
 
@@ -37,6 +37,8 @@ RUN_PHASES = {
     "preparing", "prepared", "precheck_failed", "running", "paused", "aborting", "aborted", "completed",
     "failed",
 }
+# a run of these may still change its sensors: it is resumed or discarded first
+OPEN_PHASES = frozenset({"preparing", "prepared", "precheck_failed", "running", "paused", "aborting"})
 TARGET_PHASES = {
     "preparing", "prepared", "running", "checking", "completed", "failed", "skipped",
     "rollback_running", "rolled_back", "rollback_failed",
@@ -52,6 +54,11 @@ TARGET_OPTIONAL_KEYS = {
     "runtime", "heartbeat_received_at", "completed_observed_at", "checking_started_at",
     "attempt", "decision", "approved_losses",
 }
+
+
+def open_targets(runs: Sequence[dict]) -> Set[str]:
+    """The sensors of the open fleet runs (OPEN_PHASES) among the saved ones."""
+    return {target["name"] for run in runs if run.get("phase") in OPEN_PHASES for target in run.get("targets", [])}
 
 
 def validate_run(state: dict) -> None:

@@ -1,0 +1,67 @@
+---
+#########################################
+# T-Pot Sensors - New HIVE address      #
+#########################################
+# Run by `tpot sensors hive-address` on the HIVE when its sensors reach it at a new address
+# (a migration to a fresh Debian host, a new IP): each sensor gets the certificate of this
+# HIVE (data/hive.crt) and its TPOT_HIVE_IP in the form of its .env, then T-Pot restarts there,
+# so tpotinit and the shipper start with both. tpot sensors hive-address checks the sensors
+# before (tpotctl/sensor_probe.py, the same rule for the line) and waits for the HIVE to hear
+# of them after it.
+
+- name: T-Pot - Set the new HIVE address on the sensors
+  hosts: all
+  vars:
+    local_nginx_cert_path: "~/tpotce/data/nginx/cert/nginx.crt"
+    # not ~, the copy runs with become (it would be the home of root)
+    remote_cert_path: "{{ ansible_facts.user_dir }}/tpotce/data/hive.crt"
+    tpot_env_file: "{{ ansible_facts.user_dir }}/tpotce/.env"
+
+  tasks:
+    - name: Check the HIVE address
+      ansible.builtin.assert:
+        that:
+          - tpot_hive_address is defined
+          - tpot_hive_address | string is match('^[A-Za-z0-9][A-Za-z0-9.-]*$')
+        fail_msg: "tpot_hive_address is missing or no address, run this play with tpot sensors hive-address"
+      tags: [always]
+
+    - name: Copy the HIVE certificate to the sensor
+      # tpotinit hands data/ to tpot:tpot with 770 on every start, the old copy is
+      # not the user's any more
+      become: yes
+      ansible.builtin.copy:
+        src: "{{ local_nginx_cert_path }}"
+        dest: "{{ remote_cert_path }}"
+        owner: tpot
+        group: tpot
+        mode: '0770'
+
+    - name: Read the T-Pot configuration
+      ansible.builtin.slurp:
+        src: "{{ tpot_env_file }}"
+      register: tpot_env
+      tags: [tpot_env]
+
+    # the line as docker compose reads it (tpotctl/sensor_probe.py HIVE_IP: indent and export
+    # allowed, blanks around the = or :); the last line wins, lineinfile replaces the last one
+    # it matches. The line keeps its = or : (KEY: "value"), not its indent, export or comment;
+    # a missing line is added as KEY=value
+    - name: Set the HIVE address
+      ansible.builtin.lineinfile:
+        path: "{{ tpot_env_file }}"
+        regexp: '^[ \t]*(?:export[ \t]+)?TPOT_HIVE_IP[ \t]*[=:]'
+        line: >-
+          {{ ('TPOT_HIVE_IP: "' ~ tpot_hive_address ~ '"')
+             if (tpot_env.content | b64decode
+                 | regex_findall('^[ \t]*(?:export[ \t]+)?TPOT_HIVE_IP[ \t]*[=:]', multiline=True)
+                 | last | default('', true))[-1:] == ':'
+             else ('TPOT_HIVE_IP=' ~ tpot_hive_address) }}
+        create: false
+      tags: [tpot_env]
+
+    - name: Restart T-Pot
+      become: yes
+      ansible.builtin.systemd:
+        name: tpot
+        state: restarted

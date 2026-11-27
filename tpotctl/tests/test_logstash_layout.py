@@ -32,6 +32,16 @@ ADDRESS = re.compile(r'address => "([^"]+)"')
 
 class LayoutTest(unittest.TestCase):
 
+    @unittest.skipUnless(yaml, "requires PyYAML")
+    def test_mobile_image_uses_only_the_shared_local_pipelines(self):
+        dockerfile = (DIST.parent / "Dockerfile").read_text()
+        src = re.search(r"^COPY (\S+) /usr/share/logstash/config-mobile/pipelines.yml$", dockerfile, re.M)
+        self.assertIsNotNone(src)
+        mobile = yaml.safe_load((DIST.parent / src[1]).read_text())
+        hive = yaml.safe_load((DIST / "pipelines.yml").read_text())
+        self.assertEqual([p["pipeline.id"] for p in mobile], ["files", "process", "failures"])
+        self.assertEqual(mobile, [p for p in hive if p["pipeline.id"] != "sensors"])
+
     def test_every_type_has_one_parse_file(self):
         inputs = INPUT_TYPE.findall(INPUT_FILES.read_text(encoding="utf-8"))
         self.assertGreater(len(set(inputs)), 30)

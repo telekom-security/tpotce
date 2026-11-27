@@ -31,19 +31,10 @@ UNINSTALL_SH = os.path.join(REPO_DIR, "uninstall.sh")
 SERVICE_FILE = "/etc/systemd/system/tpot.service"
 
 # keep in sync with mySUPPORTED_DISTRIBUTIONS / mySUPPORTED_VERSION of install.sh
-# (tpotctl/tests/test_installer.py compares them); includes best-effort hosts,
-# "" is a rolling release
+# (tpotctl/tests/test_installer.py compares them)
 SUPPORTED = {
-    "AlmaLinux": "10",
     "Debian GNU/Linux": "13",
-    "Fedora Linux": "44",
-    "openSUSE Tumbleweed": "",
-    "Red Hat Enterprise Linux": "10",
-    "Rocky Linux": "10",
-    "Ubuntu": "26.04",
 }
-# majors only, Ubuntu with its minor
-FULL_VERSION = {"Ubuntu"}
 
 # ports a distribution service is likely to hold, as in install.sh
 CONFLICT_PORTS = [("tcp", 25), ("tcp", 53), ("udp", 53)]
@@ -84,7 +75,7 @@ EDITIONS = [
     Edition("l", "llm", "LLM", "LLM based honeypots Beelzebub and Galah, needs Ollama (recommended) or ChatGPT.",
             True, 16, 256),
     Edition("i", "mini", "Mini", "30+ honeypots with just a couple of honeypot daemons.", True, 16, 256),
-    Edition("m", "mobile", "Mobile", "Everything to run T-Pot Mobile (available separately).", False, 8, 128),
+    Edition("m", "mobile", "Mobile", "Local honeypot data, no web UI or HIVE needed.", False, 8, 128),
     Edition("t", "tarpit", "Tarpit", "Feeds data endlessly to attackers, bots and scanners, with a DoS honeypot "
             "(ddospot).", True, 16, 256),
 ]
@@ -136,36 +127,57 @@ def os_release(path: str = "/etc/os-release") -> Dict[str, str]:
     return values
 
 
-def check_distro(release: Dict[str, str]) -> Check:
-    name, version = release.get("NAME", ""), release.get("VERSION_ID", "")
-    if name not in SUPPORTED:
-        return Check("Distribution", "fail", f"{name or 'unknown'} is not accepted by the installer; "
+def is_raspberry_pi_os(path: str = "/etc/rpi-issue") -> Optional[bool]:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            marker = handle.read().strip()
+    except FileNotFoundError:
+        return False
+    except (OSError, UnicodeError):
+        return None
+    return bool(marker) if marker else None
+
+
+def check_distro(release: Dict[str, str], raspberry_pi_os: Optional[bool] = False) -> Check:
+    if raspberry_pi_os is None:
+        return Check("Distribution", "fail", "Cannot verify the Raspberry Pi OS marker at /etc/rpi-issue")
+    name, os_id, version = release.get("NAME", ""), release.get("ID", ""), release.get("VERSION_ID", "")
+    if name not in SUPPORTED or os_id != "debian":
+        return Check("Distribution", "fail", f"{name or os_id or 'unknown'} is not accepted by the installer; "
                      "see the T-Pot README for host requirements and support tiers")
     wanted = SUPPORTED[name]
-    current = version if name in FULL_VERSION else version.split(".")[0]
+    current = version.split(".")[0]
     if wanted and current != wanted:
-        return Check("Distribution", "fail", f"The installer requires {name} {wanted}, this system runs {current}")
-    policy = "Debian is the preferred T-Pot platform. Raspberry Pi OS remains supported for T-Pot Mobile."
+        return Check("Distribution", "fail", f"The installer requires {name} {wanted}, this system runs "
+                     f"{current or 'an unknown version'}")
     detail = f"{name} {version}".strip()
-    if name != "Debian GNU/Linux":
-        return Check("Distribution", "warn", f"{detail}; best effort only: no equal test coverage or guaranteed "
-                     f"distribution-specific fixes. {policy}")
-    return Check("Distribution", "ok", f"{detail}; {policy}")
+    if raspberry_pi_os:
+        detail = f"Raspberry Pi OS Lite (64-bit) {version}; T-Pot Mobile only"
+    return Check("Distribution", "ok", f"{detail}; supported for new installations")
 
 
 # as install.sh: the images of T-Pot are amd64 and arm64 only
 MACHINES_64 = ("x86_64", "amd64", "aarch64", "arm64")
 
 
-def check_arch(machine: Optional[str] = None, bits: Optional[int] = None) -> Check:
+def check_arch(machine: Optional[str] = None, bits: Optional[int] = None,
+               raspberry_pi_os: Optional[bool] = False) -> Check:
     """A 64-bit system. The userland counts, not the kernel: a 32-bit Raspberry Pi OS boots a 64-bit
     kernel on newer Pis (machine aarch64), the Python running here is 32-bit there."""
     machine = platform.machine() if machine is None else machine
     bits = struct.calcsize("P") * 8 if bits is None else bits
-    if machine in MACHINES_64 and bits == 64:
+    if machine in MACHINES_64 and bits == 64 and (not raspberry_pi_os or machine in ("aarch64", "arm64")):
         return Check("Architecture", "ok", machine)
     return Check("Architecture", "fail", f"{machine or 'unknown'} with a {bits}-bit userland: T-Pot needs a 64-bit "
                  "system (x86-64 or arm64). For T-Pot Mobile use Raspberry Pi OS Lite (64-bit)")
+
+
+def available_editions(raspberry_pi_os: Optional[bool] = False) -> List[Edition]:
+    if raspberry_pi_os is None:
+        return []
+    if raspberry_pi_os:
+        return [EDITION_BY_LETTER["m"]]
+    return EDITIONS
 
 
 def check_root(euid: Optional[int] = None) -> Check:
@@ -352,7 +364,10 @@ def installed() -> bool:
 
 
 def run_checks(run: Callable = subprocess.run, opener: Callable = urllib.request.urlopen) -> List[Check]:
-    checks = [check_arch(), check_distro(os_release()), check_root(), check_account(current_login(), read_accounts())]
+    raspberry_pi_os = is_raspberry_pi_os()
+    checks = [check_arch(raspberry_pi_os=raspberry_pi_os),
+              check_distro(os_release(), raspberry_pi_os), check_root(),
+              check_account(current_login(), read_accounts())]
     if installed():
         checks.append(Check("T-Pot", "fail", "is installed already, use tpot update"))
     checks.append(check_sudo(sudo_mode(run), is_sudo_rs(run) if shutil.which("sudo") else False))
@@ -418,8 +433,6 @@ def engine_command(answers: Answers, files: Dict[str, str], install_sh: str = IN
     if answers.sudo_mode not in ("secure", "convenient"):
         raise ValueError("Choose a sudo mode before installing.")
     letter = answers.edition.letter
-    if answers.custom_compose:
-        letter = "h" if answers.needs_web_user else "s"
     command = [install_sh, "-s", "-M", "-t", letter]
     if answers.custom_compose:
         command += ["-c", answers.custom_compose]
@@ -443,15 +456,17 @@ def engine_env() -> Dict[str, str]:
     return env
 
 
-PHASES = ["checks", "packages", "sudo_prepare", "playbook", "compose", "user", "pull", "sudo", "done"]
+PHASES = ["checks", "packages", "sudo_prepare", "playbook", "compose", "user", "pull", "history", "sudo", "done"]
 PHASE_TITLES = {"checks": "Checking the host", "packages": "Installing the packages", "playbook": "Setting up the host",
                 "compose": "Choosing the edition", "user": "Creating the web user", "pull": "Pulling the images",
+                "history": "Restoring the Elastic history",
                 "sudo_prepare": "Preparing sudo access", "sudo": "Applying the sudo mode",
                 "done": "Done", "failed": "Failed"}
 # where a phase starts on the whole bar, the playbook and the pull fill most of it
 SPANS = {"checks": (0.0, 0.02), "packages": (0.02, 0.05), "sudo_prepare": (0.05, 0.05),
          "playbook": (0.05, 0.78), "compose": (0.78, 0.79),
-         "user": (0.79, 0.80), "pull": (0.80, 0.99), "sudo": (0.99, 1.0), "done": (1.0, 1.0)}
+         "user": (0.79, 0.80), "pull": (0.80, 0.99), "history": (0.99, 0.99),
+         "sudo": (0.99, 1.0), "done": (1.0, 1.0)}
 
 _TASK = re.compile(r"^TASK \[(.*)\]")
 _FAILED = re.compile(r"^(fatal|failed): \[")

@@ -9,6 +9,8 @@ import os
 import platform
 import re
 import shutil
+import stat
+import struct
 import subprocess
 import sys
 import time
@@ -42,7 +44,7 @@ def linux_host() -> bool:
 
 def require_linux_host(what: str) -> None:
     if not linux_host():
-        raise OpsError(f"'{what}' needs a T-Pot host (Linux with systemd, Debian recommended), here the T-Pot "
+        raise OpsError(f"'{what}' needs a T-Pot host on Debian 13 (Raspberry Pi OS for T-Pot Mobile), here the T-Pot "
                        f"Manager prepares a configuration only")
 
 
@@ -496,6 +498,141 @@ def check_data_loss(args: List[str], timeout: int = 180, run: Callable = subproc
             if key:
                 items.append((key, text.strip()))
     return True, items, ""
+
+
+# what update.sh refuses before it changes anything (fuCHECK_PLATFORM), in its order and words ({os_id}: ID
+# of os-release); the tests keep them the same. The first one names an operation other than update or
+# backup, which the T-Pot Manager never asks for.
+# the one update Debian 12 (Raspberry Pi OS Bookworm) is qualified for: an installed release of these to this
+DEBIAN_12_RELEASES, DEBIAN_12_TARGET = ("24.04.1", "24.04.2"), "24.04.2"
+UPDATE_REFUSALS = (
+    "This updater only checks a regular update or a backup.",
+    "Regular T-Pot updates are supported only on Debian; this host reports {os_id}.",
+    "T-Pot updates require a 64-bit Debian userland on amd64 or arm64.",
+    "Raspberry Pi OS is supported for T-Pot Mobile only.",
+    "Debian 12 updates require an existing T-Pot {} or {} installation.".format(*DEBIAN_12_RELEASES),
+    f"Debian 12 is qualified only for the T-Pot {DEBIAN_12_TARGET} transition.",
+    f"T-Pot updates are supported on Debian 13; Debian 12 is allowed only for the qualified {DEBIAN_12_TARGET} "
+    "transition.",
+)
+UPDATE_BACKUP_HINT = "On an unsupported host, update.sh --backup-only remains available to prepare a move to Debian."
+DEBIAN_12_TRANSITION = (f"Debian 12 (Raspberry Pi OS Bookworm) is qualified only for the update to {DEBIAN_12_TARGET}; "
+                        "later releases need Debian 13: export for a migration, install Debian 13 (Raspberry Pi "
+                        "OS Lite 64-bit / Trixie for T-Pot Mobile) and import there.")
+_UPDATE_MACHINES = ("x86_64", "amd64", "aarch64", "arm64")
+
+# what update.sh says of the start guard of a migration (fuCHECK_MIGRATION_HOLD, fuMIGRATION_HINTS)
+MIGRATION_HELD = "A migration holds T-Pot stopped ({guard}), it is not updated."
+MIGRATION_HINTS = (
+    "Source of the migration: './tpot migrate resume-source --source ~/tpotce' in the checkout you exported "
+    "with starts it again (then export anew).",
+    "Target of the migration: './install.sh --migration' resumes the restore.",
+)
+MIGRATION_BACKUP_HINT = "update.sh --backup-only stays available, it leaves T-Pot stopped."
+_JOURNAL_KEYS = {"format", "schema", "run", "identity", "phase", "facts"}
+
+
+@dataclass(frozen=True)
+class UpdatePlatform:
+    """What update.sh would say of an update of this host: refusal one of UPDATE_REFUSALS ("" when it takes
+    it), transition DEBIAN_12_TRANSITION on a Debian 12 it takes ("" otherwise)."""
+    refusal: str
+    transition: str
+
+
+def update_refusal(os_id: str, os_major: str, machine: str, bits: str, raspberry_pi_os: bool, edition: str,
+                   installed: str, target: str) -> str:
+    """The refusal of update.sh (fuCHECK_PLATFORM) for an update, "" when it takes it: the same order and
+    the same plain comparisons of strings."""
+    if os_id != "debian":
+        return UPDATE_REFUSALS[1].format(os_id=os_id or "an unknown OS")
+    if bits != "64" or machine not in _UPDATE_MACHINES:
+        return UPDATE_REFUSALS[2]
+    if raspberry_pi_os and edition not in ("MOBILE", "mobile"):
+        return UPDATE_REFUSALS[3]
+    if os_major == "13":
+        return ""
+    if os_major == "12":
+        if installed not in DEBIAN_12_RELEASES:
+            return UPDATE_REFUSALS[4]
+        return "" if target == DEBIAN_12_TARGET else UPDATE_REFUSALS[5]
+    return UPDATE_REFUSALS[6]
+
+
+def _os_release(path: str) -> Dict[str, str]:
+    """ID and VERSION_ID as update.sh reads them: the last line of each wins, one pair of quotes goes."""
+    values = {}
+    try:
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                key, sep, value = line.rstrip("\n").partition("=")
+                if sep and key in ("ID", "VERSION_ID"):
+                    for quote in ('"', "'"):
+                        value = value[1:] if value.startswith(quote) else value
+                        value = value[:-1] if value.endswith(quote) else value
+                    values[key] = value
+    except OSError:
+        pass
+    return values
+
+
+def installation() -> str:
+    """The checkout of the installed T-Pot as the scripts name it ($HOME/tpotce). It is REPO_DIR, unless the
+    T-Pot Manager runs from another checkout: the tools checkout of a migration on a host whose release has
+    no T-Pot Manager of its own (README: Migrating to a Supported Debian Host)."""
+    return os.path.join(os.path.expanduser("~"), "tpotce")
+
+
+def update_platform(repo_dir: str = REPO_DIR, os_release: str = "/etc/os-release",
+                    rpi_issue: str = "/etc/rpi-issue", machine: Optional[str] = None,
+                    bits: Optional[int] = None, installed_dir: Optional[str] = None) -> UpdatePlatform:
+    """update.sh fuCHECK_HOST_PLATFORM for an update by the update.sh of repo_dir, from what it reads:
+    os-release, the machine and the bits of the userland (this Python's, machine and bits replace them), the
+    marker of Raspberry Pi OS (there, empty or not), the edition of the compose file in use and TPOT_VERSION
+    of .env (the installed release) of the installation installed_dir (repo_dir when None) and the file
+    version of repo_dir as the target."""
+    values = _os_release(os_release)
+    os_major = values.get("VERSION_ID", "").split(".", 1)[0]
+    machine = platform.machine() if machine is None else machine
+    bits = struct.calcsize("P") * 8 if bits is None else bits
+    installed_dir = repo_dir if installed_dir is None else installed_dir
+    env = env_values(installed_dir)
+    try:
+        name = edition_header(compose_path(installed_dir, env))[0]
+    except (OSError, UnicodeDecodeError):
+        name = ""
+    try:
+        with open(os.path.join(repo_dir, "version"), encoding="utf-8") as handle:
+            target = "".join(handle.read().split())
+    except (OSError, UnicodeDecodeError):
+        target = ""
+    refusal = update_refusal(values.get("ID", ""), os_major, machine, str(bits), os.path.isfile(rpi_issue),
+                             name, env.get("TPOT_VERSION", ""), target)
+    return UpdatePlatform(refusal, DEBIAN_12_TRANSITION if os_major == "12" and not refusal else "")
+
+
+def migration_hold(repo_dir: str = REPO_DIR, guard: Optional[str] = None) -> str:
+    """The start guard of a migration (update.sh fuMIGRATION_HELD): "" without one, "source" when the history
+    export of this checkout stopped T-Pot and resume_source starts it again (its journal says so), "held"
+    otherwise (the target of a migration, or a journal that cannot be read). Only reads: no lock, no file
+    made. A drop-in folder this user cannot search hides the guard; update.sh looks there with sudo."""
+    from tpotctl import sensor_probe
+    if not os.path.lexists(sensor_probe.HOLD if guard is None else guard):
+        return ""
+    from tpotctl import migration_history
+    try:
+        fd = os.open(migration_history.export_state(repo_dir), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as handle:
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+                return "held"
+            state = json.loads(handle.read(16 * 2 ** 20 + 1))
+    except (OSError, ValueError):
+        return "held"
+    if not isinstance(state, dict) or set(state) != _JOURNAL_KEYS or state["format"] != "tpot-migration-run" \
+            or state["schema"] != 1:
+        return "held"
+    return "source" if migration_history.holds_source(state) else "held"
 
 
 def backups(home: Optional[str] = None) -> List[str]:

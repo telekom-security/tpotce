@@ -79,6 +79,15 @@ class SettingsTest(unittest.TestCase):
         self.assertFalse(current.absent(offered["OINKCODE"]))
         self.assertNotIn("TPOT_HIVE_IP", offered)                 # not offered, SENSOR only
 
+    def test_mobile_shows_local_event_retention_but_not_hive_settings(self):
+        current = self.load()
+        current.env.set("TPOT_TYPE", "MOBILE")
+        keys = {r.key for r in current.relevant()}
+        self.assertIn("TPOT_ES_RETENTION", keys)
+        self.assertEqual(current.not_here(current.schema["TPOT_ES_RETENTION"]), "")
+        self.assertTrue(keys.isdisjoint({"WEB_USER", "LS_WEB_USER", "TPOT_HIVE_IP",
+                                         "TPOT_SENSOR_STATUS_RETENTION", "TPOT_KIBANA_OBJECTS"}))
+
     def test_problems_of_offered_keys_only_warn(self):
         current = self.load()
         values = dict(current.values, GALAH_LLM_TEMPERATURE="9")

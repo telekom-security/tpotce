@@ -281,7 +281,11 @@ class UpdateShTest(Harness):
         self.assertIn('eval "${myTRAP:-trap - INT}"', choice)
         cancel = re.search(r"function fuADOPT_CANCEL \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
         self.assertTrue(re.search(r"trap '' INT\n\s*fuROLLBACK_CHECKOUT \|\| myRC=\$\?\n\s*trap - INT\n", cancel), cancel)
+        # the way back after a refusal behind an earlier updater cannot be stopped halfway
+        refused = re.search(r"function fuPLATFORM_REFUSED \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        self.assertEqual(re.findall(r"trap .*INT.*", refused), ["trap '' INT TERM HUP", "trap - INT TERM HUP"])
         rest = read("update.sh").replace(append, "").replace(step, "").replace(choice, "").replace(cancel, "")
+        rest = rest.replace(refused, "")
         self.assertEqual(len(re.findall(r"trap .*INT", rest)), 8)
 
     def test_the_refusal_never_names_full(self):

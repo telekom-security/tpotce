@@ -6,7 +6,6 @@ unset CDPATH
 export TPOT_UPDATE_ACTIVE=1
 
 # Some global vars
-myCOMPOSEFILE="~/tpotce/docker-compose.yml"
 myDATE=$(date +%Y%m%d%H%M%S)
 
 # Where the backups live. Its own directory with 0700, because the archives carry
@@ -97,6 +96,10 @@ myES="http://127.0.0.1:64298"
 # right after a reboot would otherwise walk away without the saved objects.
 myELASTIC_GRACE="${TPOT_ELASTIC_GRACE:-120}"
 
+# The start guard of tpot migrate (tpotctl/migration_runtime.py systemd_guard): while it is there a
+# migration holds tpot.service stopped, the history export on the source or the restore on the target.
+myMIGRATION_GUARD="${TPOT_MIGRATION_GUARD:-/etc/systemd/system/tpot.service.d/90-tpot-migration.conf}"
+
 # Elasticsearch 9 reads only the data of 8.19, the last minor of 8: the data of an older 8 goes
 # through the official images of this version once (fuES_STEP_819), Kibana migrates its saved
 # objects there. Their containers and network, the ports on the loopback interface (free while
@@ -138,9 +141,14 @@ myRUNNING=""
 mySTOPPED=""
 # set once fuSTART_TPOT brought T-Pot up again in this run
 mySTARTED=""
+# set where this run met the start guard of a migration: then no start is a way back (fuEND)
+myMIGRATION_HOLD=""
 # systemctl is-active tpot when this run started (main, not after a handover): a refusal starts T-Pot
 # again only when it ran then (fuRESTART_AFTER_REFUSAL)
 myWAS_ACTIVE=""
+# set once the checkout and the configuration are back on the release from before this update
+# (fuDONE_ROLLED_BACK): a start runs that release, not the images of a backup (fuRESTART_AFTER_REFUSAL)
+myROLLED_BACK=""
 
 # The look of the T-Pot scripts (installer/lib/ui.sh: gum at a terminal, plain text
 # otherwise) and the @@tpot marks the task screen of tpot reads (fuMARK). BASH_SOURCE:
@@ -363,6 +371,7 @@ myPREPARED="${TPOT_UPDATE_PREPARED}"
 myARCHIVE="${TPOT_UPDATE_ARCHIVE}"
 
 myEDITION="${TPOT_UPDATE_EDITION}"
+myMOBILE_SOURCE=""
 myCOMPOSE_CUSTOMIZED="${TPOT_UPDATE_COMPOSE_CUSTOMIZED}"
 # set when the edition could not be put in place (fuRESTORE_EDITION), the summary does not claim it then
 myEDITION_MISSING=""
@@ -450,6 +459,8 @@ lists as kept-out is not carried over. At a terminal the run asks
 	  --example "./update.sh -y --backup-only -s" "Only a backup, T-Pot runs again afterwards" \
 	  --example "./update.sh --check-data-loss" "List what an update would lose for good: '@@tpot loss <key> <text>'" \
 	  --note "restore.sh brings a backup back, tpot update hands every option on to update.sh." \
+	  --note "While a migration (tpot migrate) holds T-Pot stopped, the update and --check-data-loss are
+refused with exit 1; --backup-only still works and leaves T-Pot stopped, -s included." \
 	  --note "A loss of data is what the backup of the run cannot bring back: older backups deleted to
 make room, an Elasticsearch data upgrade whose data the backup has no room for (without --full
 the run adds that data to its backup by itself where there is room), the step of the data of an
@@ -778,7 +789,9 @@ function fuEND () {
 	      then
 	        fuDID fail "It stopped with an error, see the messages above."
 	    fi
-	    if [ -n "${mySTOPPED}" ];
+	    if [ -n "${myMIGRATION_HOLD}" ];
+	      then fuDID next "A migration holds T-Pot stopped, the hints above name the ways out."
+	    elif [ -n "${mySTOPPED}" ];
 	      then fuDID next "T-Pot is stopped, 'sudo systemctl start tpot' brings it back."
 	    elif [ -z "${mySTARTED}" ];
 	      then fuDID info "T-Pot was left running."
@@ -876,7 +889,15 @@ function fuBACKUP_SIZE () {
 	echo $((mySUM + 4194304))
 }
 
-# No room for the backup, even with the older ones gone: T-Pot was left running.
+# What a check before the stop left T-Pot as: running, or stopped where a migration holds it.
+function fuLEFT_AS () {
+	if [ -n "${myMIGRATION_HOLD}" ];
+	  then echo "A migration holds T-Pot stopped."
+	  else echo "T-Pot was left running."
+	fi
+}
+
+# No room for the backup, even with the older ones gone: T-Pot was left as it was (fuLEFT_AS).
 function fuNO_ROOM () {
 	# `--full` was asked for, usually because the update brings a new Elastic Stack
 	# whose data upgrade cannot be undone - quietly taking the regular backup instead
@@ -884,13 +905,13 @@ function fuNO_ROOM () {
 	if [ -n "${myFULL}" ];
 	  then
 	    fuUI_ERROR "Not enough room for a full backup."
-	    fuUI_HINT "Free up space in ${myBACKUPDIR} or on the filesystem, or run without '--full'. T-Pot was left running."
+	    fuUI_HINT "Free up space in ${myBACKUPDIR} or on the filesystem, or run without '--full'. $(fuLEFT_AS)"
 	    fuUI_HINT "Exiting."
 	    echo
 	    exit 1
 	fi
 	fuUI_ERROR "Not enough room for a backup and T-Pot needs the disk."
-	fuUI_HINT "Free up space in ${myBACKUPDIR} or on the filesystem, T-Pot was left running."
+	fuUI_HINT "Free up space in ${myBACKUPDIR} or on the filesystem. $(fuLEFT_AS)"
 	fuUI_HINT "Exiting."
 	echo
 	exit 1
@@ -962,7 +983,7 @@ function fuCHECK_BACKUP_SPACE () {
 	fi
 	if ! fuLOSS_CONFIRM backups "${myTEXT}" "${myNAMES[@]}";
 	  then
-	    fuUI_HINT "Nothing was deleted and T-Pot was left running. Free up space in ${myBACKUPDIR} or on the filesystem."
+	    fuUI_HINT "Nothing was deleted. $(fuLEFT_AS) Free up space in ${myBACKUPDIR} or on the filesystem."
 	    fuUI_HINT "Exiting."
 	    echo
 	    if [ -n "${myBACKUP_ONLY}" ];
@@ -977,7 +998,7 @@ function fuCHECK_BACKUP_SPACE () {
 	    if ! rm -f "${myVICTIM}";
 	      then
 	        fuUI_ERROR "Could not remove ${myVICTIM}, so there is not enough room for the backup."
-	        fuUI_HINT "Free up space in ${myBACKUPDIR} or on the filesystem, T-Pot was left running."
+	        fuUI_HINT "Free up space in ${myBACKUPDIR} or on the filesystem. $(fuLEFT_AS)"
 	        fuUI_HINT "Exiting."
 	        echo
 	        exit 1
@@ -1132,12 +1153,97 @@ function fuSAME_COMPOSE () {
 	       <(sed -E '/^# T-Pot sources sha256: [0-9a-f]{64}[[:space:]]?$/d' "$2")
 }
 
+function fuMOBILE_CONFLICT () {
+	fuUI_ERROR "Cannot safely match the Mobile edition, its Compose file and TPOT_TYPE."
+	fuUI_HINT "Choose an edition explicitly (tpot edition set), or rebuild the intended CUSTOM base and retry. --backup-only remains available."
+	exit 1
+}
+
+# Decide from the source pair, never from services that happen to be absent.
+function fuCHECK_MOBILE_SOURCE () {   # env, active compose, source release's mobile template
+	local myTYPE myNAME myHEADER myLINE myCONFIG
+	myTYPE=$(fuENV_VALUE "$1" TPOT_TYPE)
+	myCONFIG=$(fuENV_VALUE "$1" TPOT_DOCKER_COMPOSE)
+	myLINE=$(fuEDITION_LINE "$2")
+	myNAME="${myLINE#* }"
+	myHEADER=""
+	[ -z "${myLINE}" ] || myHEADER=$(sed -n "$((${myLINE%% *} + 1))p" "$2")
+	if [ "${myTYPE}" != MOBILE ] && [ "${myNAME}" != MOBILE ] && [[ "${myHEADER}" != *base=MOBILE* ]]; then
+	    return 0
+	fi
+	case "${myCONFIG}" in ""|./docker-compose.yml|docker-compose.yml|"$HOME/tpotce/docker-compose.yml") ;; *) fuMOBILE_CONFLICT ;; esac
+	case "${myTYPE:-HIVE}" in MOBILE|HIVE) ;; *) fuMOBILE_CONFLICT ;; esac
+	if [ ! -e "$2" ] && [ "${myTYPE}" = MOBILE ]; then
+	    myEDITION=MOBILE
+	elif [ "${myNAME}" = MOBILE ] && fuSAME_COMPOSE "$2" "$3"; then
+	    myEDITION=MOBILE
+	elif [ "${myNAME}" = CUSTOM ] && [ "${myHEADER}" = '# customizer: version=2 base=MOBILE' ] && fuCUSTOM_CHECKSUM "$2" &&
+	     "$(fuCUSTOMIZER_PYTHON)" "${myHERE}/compose/customizer.py" --check-install "$2" --tpot-type MOBILE; then
+	    myEDITION=CUSTOM
+	else
+	    fuMOBILE_CONFLICT
+	fi
+	myMOBILE_SOURCE=1
+	# The old local ES store, logs and exports are part of a Mobile rollback.
+	myFULL=1
+}
+
+function fuMOBILE_ENV () {
+	[ -n "${myMOBILE_SOURCE}" ] && [ -z "${myOLDER_CHECKOUT}" ] || return 0
+	PYTHONPATH="${myHERE}" python3 - "$HOME/tpotce/.env" <<'PY' || exit 1
+import sys
+from tpotctl.envfile import EnvFile
+env = EnvFile(sys.argv[1])
+if env.get("TPOT_TYPE") != "MOBILE":
+    env.set("TPOT_TYPE", "MOBILE", system=True)
+    env.save()
+PY
+}
+
+function fuMOBILE_PREFLIGHT () {
+	if [ -z "${myBACKUP_ONLY}" ]; then
+	    local myROOT="$HOME/tpotce" myTEMPLATE myCOMMIT
+	    if [ -n "${myPREPARED}" ] && [ -f "${myARCHIVE}" ]; then
+	        fuTMPDIR
+	        fuOLD_UPDATER_READ "${myARCHIVE}" || exit 1
+	        myTEMPLATE="${myOLD_DIR}/mobile.yml"
+	        myCOMMIT=$(tar xOf "${myARCHIVE}" rollback.txt 2>/dev/null)
+	        if [[ "${myCOMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
+	            git -C "${myROOT}" show "${myCOMMIT}:compose/mobile.yml" > "${myTEMPLATE}" 2>/dev/null || :
+	        fi
+	        [ ! -e "${myOLD_DIR}/broken" ] && [ ! -L "${myOLD_DIR}/files/docker-compose.yml" ] || fuMOBILE_CONFLICT
+	        fuCHECK_MOBILE_SOURCE "$(fuOLD_UPDATER_FILE .env)" "${myOLD_DIR}/files/docker-compose.yml" "${myTEMPLATE}"
+	    elif [ -z "${myPREPARED}" ]; then
+	        myTEMPLATE="${myROOT}/compose/mobile.yml"
+	        if [ -e "${myROOT}/.git" ] && [ "$(fuEDITION_LINE "${myROOT}/docker-compose.yml" | cut -d ' ' -f2-)" = MOBILE ]; then
+	            fuTMPDIR
+	            myTEMPLATE="${myTMPDIR}/source-mobile.yml"
+	            myCOMMIT=HEAD
+	            if [ -n "${myOLD_UPDATER_RAN}" ]; then
+	                case "${myOLD_UPDATER_RAN}" in
+	                  *.tgz) myCOMMIT=$(fuOLD_TGZ_ROLLBACK_COMMIT "${myOLD_UPDATER_RAN}") ;;
+	                  *) myCOMMIT=$(tar xOf "${myOLD_UPDATER_RAN}" rollback.txt 2>/dev/null) ;;
+	                esac
+	                [[ "${myCOMMIT}" =~ ^[0-9a-f]{40}$ ]] || fuMOBILE_CONFLICT
+	            fi
+	            git -C "${myROOT}" show "${myCOMMIT}:compose/mobile.yml" > "${myTEMPLATE}" || fuMOBILE_CONFLICT
+	        fi
+	        fuCHECK_MOBILE_SOURCE "${myROOT}/.env" "${myROOT}/docker-compose.yml" "${myTEMPLATE}"
+	    fi
+	fi
+}
+
 function fuCHECK_EDITION () {
 	local myCOMPOSE=""
 	local myKNOWN=""
 	local i=""
 	echo
 	fuUI_INFO "Checking the installed T-Pot edition ..."
+	fuMOBILE_PREFLIGHT
+	if [ -n "${myMOBILE_SOURCE}" ]; then
+	    fuUI_OK "Verified Mobile source (${myEDITION}); the rollback backup includes the full data folder."
+	    return 0
+	fi
 	# A restarted update.sh inherits the result of the first run, the compose file
 	# has already been reset by then and cannot be read again.
 	if [ -n "${myEDITION}" ];
@@ -1414,6 +1520,158 @@ function fuCHECK_VERSION () {
 	echo
 }
 
+# Decide whether this updater may run on the named host. Debian 12 and Raspberry Pi OS
+# Bookworm are transition-only platforms for the 24.04.2 update of an existing install.
+function fuCHECK_PLATFORM () {   # operation, OS id/major, machine, userland bits, Pi OS, edition, installed release
+	local myOP="$1" myOS_ID="$2" myOS_MAJOR="$3" myMACHINE="$4" myBITS="$5"
+	local myPI_OS="$6" myEDITION="$7" myINSTALLED="$8" myTARGET="" myWHY=""
+	[ "${myOP}" == "backup" ] && return 0
+	myTARGET=$(tr -d "[:space:]" < "${myHERE}/version" 2>/dev/null)
+	if [ "${myOP}" != "update" ];
+	  then
+	    myWHY="This updater only checks a regular update or a backup."
+	elif [ "${myOS_ID}" != "debian" ];
+	  then
+	    myWHY="Regular T-Pot updates are supported only on Debian; this host reports ${myOS_ID:-an unknown OS}."
+	elif [ "${myBITS}" != "64" ] || ! { [[ "${myMACHINE}" == "x86_64" || "${myMACHINE}" == "amd64" ]] \
+	                                 || [[ "${myMACHINE}" == "aarch64" || "${myMACHINE}" == "arm64" ]]; };
+	  then
+	    myWHY="T-Pot updates require a 64-bit Debian userland on amd64 or arm64."
+	elif [ "${myPI_OS}" == "1" ] && [ "${myEDITION}" != "MOBILE" ] && [ "${myEDITION}" != "mobile" ];
+	  then
+	    myWHY="Raspberry Pi OS is supported for T-Pot Mobile only."
+	elif [ "${myOS_MAJOR}" == "13" ];
+	  then
+	    return 0
+	elif [ "${myOS_MAJOR}" == "12" ];
+	  then
+	    if [ "${myINSTALLED}" != "24.04.1" ] && [ "${myINSTALLED}" != "24.04.2" ];
+	      then
+	        myWHY="Debian 12 updates require an existing T-Pot 24.04.1 or 24.04.2 installation."
+	    elif [ "${myTARGET}" != "24.04.2" ];
+	      then
+	        myWHY="Debian 12 is qualified only for the T-Pot 24.04.2 transition."
+	    else
+	      return 0
+	    fi
+	else
+	  myWHY="T-Pot updates are supported on Debian 13; Debian 12 is allowed only for the qualified 24.04.2 transition."
+	fi
+	fuUI_ERROR "${myWHY}"
+	fuUI_HINT "On an unsupported host, update.sh --backup-only remains available to prepare a move to Debian."
+	fuDID fail "${myWHY}"
+	return 1
+}
+
+# Read host identity only from os-release and the actual userland. Pi OS has the same
+# os-release ID as Debian, so its release marker and installed edition are checked too.
+function fuCHECK_HOST_PLATFORM () {   # update or backup
+	local myOP="$1" myOS_DATA="" myKEY="" myVALUE="" myOS_ID="" myOS_VERSION=""
+	local myOS_MAJOR="" myMACHINE="" myBITS="" myPI_OS="0" myEDITION=""
+	local myCOMPOSE="" myINSTALLED="" myOLD_COMPOSE=""
+	[ "${myOP}" == "backup" ] && return 0
+	myOS_DATA=$(grep -E '^(ID|VERSION_ID)=' /etc/os-release 2>/dev/null)
+	while IFS="=" read -r myKEY myVALUE;
+	  do
+	    myVALUE="${myVALUE#\"}"
+	    myVALUE="${myVALUE%\"}"
+	    myVALUE="${myVALUE#\'}"
+	    myVALUE="${myVALUE%\'}"
+	    case "${myKEY}" in
+	      ID) myOS_ID="${myVALUE}" ;;
+	      VERSION_ID) myOS_VERSION="${myVALUE}" ;;
+	    esac
+	done <<< "${myOS_DATA}"
+	myOS_MAJOR="${myOS_VERSION%%.*}"
+	myMACHINE=$(uname -m 2>/dev/null)
+	myBITS=$(getconf LONG_BIT 2>/dev/null)
+	[ ! -f /etc/rpi-issue ] || myPI_OS="1"
+	if [ -n "${myPREPARED}" ] && [ -n "${myARCHIVE}" ];
+	  then
+	    fuTMPDIR
+	    if fuOLD_UPDATER_READ "${myARCHIVE}";
+	      then
+	        myINSTALLED=$(fuARCHIVE_ENV "${myARCHIVE}" TPOT_VERSION)
+	        myOLD_COMPOSE=$(fuOLD_UPDATER_FILE docker-compose.yml)
+	        myEDITION="${myEDITION:-$(fuEDITION_LINE "${myOLD_COMPOSE}" | cut -d " " -f2-)}"
+	    fi
+	else
+	  myCOMPOSE=$(fuENV_VALUE "$HOME/tpotce/.env" TPOT_DOCKER_COMPOSE)
+	  myCOMPOSE="${myCOMPOSE:-./docker-compose.yml}"
+	  case "${myCOMPOSE}" in
+	    /*) ;;
+	    *) myCOMPOSE="$HOME/tpotce/${myCOMPOSE#./}" ;;
+	  esac
+	  myEDITION="${myEDITION:-$(fuEDITION_LINE "${myCOMPOSE}" | cut -d " " -f2-)}"
+	  myINSTALLED=$(fuENV_VALUE "$HOME/tpotce/.env" TPOT_VERSION)
+	fi
+	fuCHECK_PLATFORM "${myOP}" "${myOS_ID}" "${myOS_MAJOR}" "${myMACHINE}" "${myBITS}" \
+	  "${myPI_OS}" "${myEDITION}" "${myINSTALLED}"
+}
+
+# rc 0 while the start guard of a migration holds T-Pot (fuMIGRATION_HINTS names the ways out). A
+# drop-in folder this user cannot search would hide it: sudo looks there.
+function fuMIGRATION_HELD () {
+	local myDIR="${myMIGRATION_GUARD%/*}"
+	if [ -e "${myMIGRATION_GUARD}" ] || [ -L "${myMIGRATION_GUARD}" ];
+	  then return 0
+	fi
+	[ -d "${myDIR}" ] && [ ! -x "${myDIR}" ] || return 1
+	sudo test -e "${myMIGRATION_GUARD}" 2>/dev/null || sudo test -L "${myMIGRATION_GUARD}" 2>/dev/null
+}
+
+function fuMIGRATION_HINTS () {
+	fuUI_HINT "Source of the migration: './tpot migrate resume-source --source ~/tpotce' in the checkout you exported with starts it again (then export anew)."
+	fuUI_HINT "Target of the migration: './install.sh --migration' resumes the restore."
+}
+
+# An update past the guard would change the source a migration has to find unchanged, or a target
+# before its history is verified. A backup (--backup-only) is fine, it does not start T-Pot then.
+function fuCHECK_MIGRATION_HOLD () {
+	fuMIGRATION_HELD || return 0
+	myMIGRATION_HOLD="1"
+	fuUI_ERROR "A migration holds T-Pot stopped (${myMIGRATION_GUARD}), it is not updated."
+	fuMIGRATION_HINTS
+	fuUI_HINT "update.sh --backup-only stays available, it leaves T-Pot stopped."
+	fuDID fail "A migration holds T-Pot stopped, the update was refused."
+	return 1
+}
+
+# The Compose project of T-Pot, the label com.docker.compose.project of its containers and networks:
+# the name docker compose gives ~/tpotce/docker-compose.yml (its .env may set one), tpotce where it
+# cannot tell
+function fuTPOT_PROJECT () {
+	local myNAME=""
+	myNAME=$(docker compose -f "$HOME/tpotce/docker-compose.yml" config --format json 2>/dev/null \
+	  | python3 -c 'import json, sys; print(json.load(sys.stdin).get("name", ""))' 2>/dev/null)
+	[[ "${myNAME}" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || myNAME="tpotce"
+	echo "${myNAME}"
+}
+
+# What a stopped T-Pot leaves behind, and only that: the containers and networks of its Compose
+# project (orphans of an earlier compose file too, i.e. the network per honeypot until 24.04.2, which
+# would keep its address pool) and those of the Elasticsearch step (fuES_STEP_819) a hard end left.
+# Their anonymous volumes go with them (rm -v). Containers, networks and volumes of others stay, of
+# the images only the untagged ones go.
+function fuTPOT_CLEANUP () {
+	local myPROJECT="" myIDS=()
+	myPROJECT=$(fuTPOT_PROJECT)
+	{
+	  mapfile -t myIDS < <(docker ps -aq --filter "label=com.docker.compose.project=${myPROJECT}")
+	  if [ "${#myIDS[@]}" -gt 0 ];
+	    then
+	      docker stop "${myIDS[@]}"
+	      docker rm -v "${myIDS[@]}"
+	  fi
+	  docker stop -t 120 "${myKB_STEP_NAME}" "${myES_STEP_NAME}"
+	  docker rm -v "${myKB_STEP_NAME}" "${myES_STEP_NAME}"
+	  mapfile -t myIDS < <(docker network ls -q --filter "label=com.docker.compose.project=${myPROJECT}")
+	  [ "${#myIDS[@]}" -eq 0 ] || docker network rm "${myIDS[@]}"
+	  docker network rm "${myES_STEP_NAME}"
+	  docker image prune -f
+	} >> "${myLOG}" 2>&1
+}
+
 # Stop T-Pot to avoid race conditions with running containers with regard to the current T-Pot config
 function fuSTOP_TPOT () {
 	echo
@@ -1434,15 +1692,8 @@ function fuSTOP_TPOT () {
 	  else
 	    mySTOPPED="1"
 	    fuUI_OK "T-Pot is stopped."
-	    if [ "$(docker ps -aq)" != "" ];
-	      then
-	        docker stop $(docker ps -aq)
-	        docker container prune -f && docker image prune -f && docker volume prune -f
-	    fi
-	    # the networks of an earlier compose file (one per honeypot until 24.04.2) would
-	    # keep their address pools
-	    docker network prune -f > /dev/null 2>&1
-	    fuUI_OK "Containers cleaned up."
+	    fuTPOT_CLEANUP
+	    fuUI_OK "The containers and networks of T-Pot are cleaned up."
 	fi
 	echo
 }
@@ -1568,6 +1819,14 @@ json.dump({'policy': myRAW['tpot']['policy']}, open('${myOUT}/ilm_policy_tpot.js
 # Bring T-Pot back up. Only on request, so nothing changes for anyone who relies on
 # the services staying down after a run.
 function fuSTART_TPOT () {
+	# systemctl start ends with 0 when the guard's condition fails, docker compose would go around it
+	if fuMIGRATION_HELD;
+	  then
+	    myMIGRATION_HOLD="1"
+	    fuUI_ERROR "A migration holds T-Pot stopped (${myMIGRATION_GUARD}), it is not started."
+	    fuMIGRATION_HINTS
+	    return 2
+	fi
 	fuUI_INFO "Now starting T-Pot ..."
 	if sudo systemctl start tpot.service 2>/dev/null;
 	  then
@@ -1777,7 +2036,10 @@ function fuDATA_PATH () {
 # this one without a handover (the tag 24.04.1, the branch master of 2026-08-24): its pull came before
 # the backup of this run. The update.sh of the release before on the branch master (what the installed hosts run) hands
 # its archive over (myPREPARED): written before its pull, its rollback.txt names the commit that ran.
-function fuCAN_ROLLBACK () {
+# $1 is another archive with a rollback.txt, the .tar of the branch master without a handover
+# (fuPLATFORM_REFUSED); myARCHIVE without it.
+function fuCAN_ROLLBACK () {   # [$1 = archive]
+	local myARCHIVE="${1:-${myARCHIVE}}"
 	local myCOMMIT=""
 	myCOMMIT=$(tar xOf "${myARCHIVE}" rollback.txt 2>/dev/null | tr -d "[:space:]")
 	[ -n "${myCOMMIT}" ] && [ "${myCOMMIT}" != "$(git -C "$HOME/tpotce" rev-parse HEAD 2>/dev/null)" ] \
@@ -1786,8 +2048,9 @@ function fuCAN_ROLLBACK () {
 
 # Put the checkout and the configuration back to where they were before this run,
 # so that neither a start nor the daily reboot picks up the new release. Only
-# possible if the archive of this run points at an older commit (fuCAN_ROLLBACK).
-function fuROLLBACK_CHECKOUT () {
+# possible if the archive of this run (or $1, as for fuCAN_ROLLBACK) points at an older commit.
+function fuROLLBACK_CHECKOUT () {   # [$1 = archive]
+	local myARCHIVE="${1:-${myARCHIVE}}"
 	if ! fuCAN_ROLLBACK;
 	  then
 	    fuUI_WARN "The archive holds no earlier commit to go back to, the checkout stays on this release."
@@ -1829,6 +2092,7 @@ function fuDONE_ROLLED_BACK () {
 	myVERSION=$(cat "$HOME/tpotce/version" 2>/dev/null | tr -d "[:space:]")
 	myTAG=$(fuENV_VALUE "$HOME/tpotce/.env" TPOT_VERSION)
 	fuDID info "Back on $(git -C "$HOME/tpotce" rev-parse --abbrev-ref HEAD 2>/dev/null) at $(git -C "$HOME/tpotce" rev-parse --short HEAD 2>/dev/null)${myVERSION:+, version ${myVERSION}}${myTAG:+, TPOT_VERSION=${myTAG}}."
+	myROLLED_BACK="1"
 	return 0
 }
 
@@ -1838,10 +2102,12 @@ function fuDONE_ROLLED_BACK () {
 # after an updater without one (myOLD_UPDATER_RAN), that is not known: where tpot.service is enabled (a
 # reboot would start it as well) or -s asks for it. Only after a rollback that worked: on the new
 # checkout a start would upgrade the data. After an updater without a handover the checkout is the new
-# release, your .env and compose file from its backup name the images that ran. rc 0 when T-Pot runs.
+# release, your .env and compose file from its backup name the images that ran, unless a rollback put
+# the checkout back as well (myROLLED_BACK). rc 0 when T-Pot runs.
 function fuRESTART_AFTER_REFUSAL () {
 	local myON="on the release from before this update"
-	[ -z "${myOLD_UPDATER_RAN}" ] || myON="with your .env and docker-compose.yml from the backup of the update.sh before, on their images"
+	[ -n "${myROLLED_BACK}" ] || [ -z "${myOLD_UPDATER_RAN}" ] \
+	  || myON="with your .env and docker-compose.yml from the backup of the update.sh before, on their images"
 	if [ "$(systemctl is-active tpot 2>/dev/null)" == "active" ];
 	  then
 	    mySTOPPED=""
@@ -1871,8 +2137,179 @@ function fuRESTART_AFTER_REFUSAL () {
 	    fuDID ok "T-Pot runs again, ${myON}."
 	    return 0
 	fi
-	fuDID warn "T-Pot did not start again, please start it yourself."
+	[ -n "${myMIGRATION_HOLD}" ] || fuDID warn "T-Pot did not start again, please start it yourself."
 	return 1
+}
+
+# The update.sh of the tag 24.04.1 wrote no rollback.txt into its tgz: after it, it ran `git reset
+# --hard` and `git pull --force`. The reflog of ~/tpotce names the commit before that pull, but only
+# while nothing else moved HEAD: the newest entry is a pull not older than the tgz, the one before it
+# exactly the `reset: moving to HEAD` of that updater, its commit an ancestor of HEAD (not HEAD itself)
+# whose file version is the TPOT_VERSION of the tgz. Prints that commit, rc 1 otherwise.
+function fuOLD_TGZ_ROLLBACK_COMMIT () {   # $1 = tgz
+	local myLOG="" myLINE0="" myLINE1="" myREST="" myWHEN="" myMTIME="" myCOMMIT="" myTAG="" myVERSION=""
+	myLOG=$(git -C "$HOME/tpotce" log -g -n 2 --date=unix --format='%H %gd %gs' HEAD 2>/dev/null) || return 1
+	{ IFS= read -r myLINE0; IFS= read -r myLINE1; } <<< "${myLOG}"
+	[ -n "${myLINE0}" ] && [ -n "${myLINE1}" ] || return 1
+	# a line is "<commit> HEAD@{<epoch>} <subject>"
+	myREST="${myLINE0#* }"
+	myWHEN="${myREST%% *}"
+	myWHEN="${myWHEN#HEAD@\{}"
+	myWHEN="${myWHEN%\}}"
+	[[ "${myREST#* }" == pull* ]] && [[ "${myWHEN}" =~ ^[0-9]+$ ]] || return 1
+	myMTIME=$(stat -c %Y -- "$1" 2>/dev/null || stat -f %m -- "$1" 2>/dev/null)
+	[[ "${myMTIME}" =~ ^[0-9]+$ ]] && [ "${myWHEN}" -ge "${myMTIME}" ] || return 1
+	myCOMMIT="${myLINE1%% *}"
+	myREST="${myLINE1#* }"
+	[ "${myREST#* }" == "reset: moving to HEAD" ] || return 1
+	[ "${myCOMMIT}" != "$(git -C "$HOME/tpotce" rev-parse HEAD 2>/dev/null)" ] \
+	  && git -C "$HOME/tpotce" merge-base --is-ancestor "${myCOMMIT}" HEAD 2>/dev/null || return 1
+	fuTMPDIR
+	myTAG=$(fuARCHIVE_ENV "$1" TPOT_VERSION) || return 1
+	myVERSION=$(git -C "$HOME/tpotce" show "${myCOMMIT}:version" 2>/dev/null | tr -d "[:space:]")
+	[ -n "${myTAG}" ] && [ "${myVERSION}" == "${myTAG}" ] || return 1
+	echo "${myCOMMIT}"
+}
+
+# The way back for the tgz of the tag 24.04.1 (fuOLD_TGZ_ROLLBACK_COMMIT): the checkout goes to that
+# commit, your .env and docker-compose.yml stay as they are. The commit tracks both, so the reset
+# writes its own over them without a word: they are kept aside first (content and mode) and written
+# back in place afterwards. rc 1 before any change where one of them is no regular file. Where the reset
+# or a write back fails, both stay in a private copy in your home directory, myRESCUE of the caller
+# (fuPLATFORM_REFUSED) names it for its hints; the copy aside goes with myTMPDIR.
+function fuROLLBACK_OLD_TGZ () {   # $1 = tgz, $2 = commit
+	local myFILE="" myKEEP="" myRC=0 myI=0
+	local myFILES=(.env docker-compose.yml) myMODES=() myFAILED=()
+	for myFILE in "${myFILES[@]}";
+	  do
+	    if [ ! -f "$HOME/tpotce/${myFILE}" ] || [ -L "$HOME/tpotce/${myFILE}" ];
+	      then
+	        fuUI_WARN "~/tpotce/${myFILE} is no regular file, the checkout stays on this release."
+	        return 1
+	    fi
+	  done
+	fuTMPDIR
+	myKEEP=$(mktemp -d "${myTMPDIR}/rollback.XXXXXX") || return 1
+	for myFILE in "${myFILES[@]}";
+	  do
+	    myMODES[${myI}]=$(stat -c %a -- "$HOME/tpotce/${myFILE}" 2>/dev/null || stat -f %Lp -- "$HOME/tpotce/${myFILE}" 2>/dev/null)
+	    if ! [[ "${myMODES[${myI}]}" =~ ^[0-7]{3,4}$ ]] || ! cp -- "$HOME/tpotce/${myFILE}" "${myKEEP}/${myFILE}" 2>/dev/null;
+	      then
+	        fuUI_WARN "~/tpotce/${myFILE} could not be kept aside, the checkout stays on this release."
+	        return 1
+	    fi
+	    myI=$((myI + 1))
+	  done
+	myI=0
+	fuUI_HINT "Putting the checkout back to the commit before the pull of the update.sh before, your .env and docker-compose.yml stay."
+	git -C "$HOME/tpotce" reset -q --hard "$2" || myRC=$?
+	# also after a failed reset: it may have written some of the files already; every file is tried
+	for myFILE in "${myFILES[@]}";
+	  do
+	    # the mode first: a .env with your passwords is never readable for others
+	    if [ ! -f "$HOME/tpotce/${myFILE}" ] || [ -L "$HOME/tpotce/${myFILE}" ] \
+	       || ! chmod "${myMODES[${myI}]}" "$HOME/tpotce/${myFILE}" 2>/dev/null \
+	       || ! cat -- "${myKEEP}/${myFILE}" > "$HOME/tpotce/${myFILE}" 2>/dev/null;
+	      then
+	        myFAILED+=("${myFILE}")
+	    fi
+	    myI=$((myI + 1))
+	  done
+	# the checkout is the one before this update again, tpot needs no restart for it
+	[ "$(git -C "$HOME/tpotce" rev-parse HEAD 2>/dev/null)" != "$2" ] || fuMARK changed back
+	if [ "${myRC}" -eq 0 ] && [ "${#myFAILED[@]}" -eq 0 ];
+	  then
+	    fuDONE_ROLLED_BACK
+	    return 0
+	fi
+	[ "${myRC}" -eq 0 ] || fuUI_ERROR "The checkout could not be put back to $2."
+	for myFILE in "${myFAILED[@]}";
+	  do
+	    fuUI_ERROR "~/tpotce/${myFILE} could not be written back."
+	  done
+	if myRESCUE=$(mktemp -d "$HOME/tpot_rollback.XXXXXX") \
+	   && cp -p -- "${myKEEP}/.env" "${myKEEP}/docker-compose.yml" "${myRESCUE}/";
+	  then
+	    fuUI_HINT "Your .env and docker-compose.yml of before are kept in ${myRESCUE}."
+	  else
+	    [ -z "${myRESCUE}" ] || rm -rf -- "${myRESCUE}"
+	    myRESCUE=""
+	    fuUI_HINT "Your .env and docker-compose.yml of before are in $1."
+	fi
+	return 1
+}
+
+# A refusal of the host (fuCHECK_HOST_PLATFORM) or of a migration hold (fuCHECK_MIGRATION_HOLD).
+# Run on its own this update.sh has changed nothing yet: exit 1. Behind an earlier updater (a handover,
+# myPREPARED, or one without, myOLD_UPDATER_RAN) T-Pot is stopped and the checkout is the new release:
+# it goes back to the release before where that is safe (rollback.txt of the archive, the reflog for
+# the tgz of the tag 24.04.1). After a refusal of the host T-Pot then runs again where
+# fuRESTART_AFTER_REFUSAL says so, a hold keeps it stopped. Without a safe way back nothing more is
+# changed and the hints name the commands. Always exit 1.
+function fuPLATFORM_REFUSED () {   # $1 = platform | hold
+	local myWHY="$1" myBACKUP="${myOLD_UPDATER_RAN}" myCOMMIT="" myBACK="" myTGZ="" myRESCUE=""
+	local myREADME="see the README section 'Migrating to a Supported Debian Host'."
+	local myHINTS=()
+	[ -n "${myPREPARED}${myOLD_UPDATER_RAN}" ] || exit 1
+	mySTOPPED="1"
+	[ -z "${myPREPARED}" ] || myBACKUP="${myARCHIVE}"
+	# before the command substitution of fuOLD_TGZ_ROLLBACK_COMMIT, so that fuEND removes it
+	fuTMPDIR
+	echo
+	# a signal now would leave the checkout half way back (restore.sh inherits the ignored signals)
+	trap '' INT TERM HUP
+	case "${myBACKUP}" in
+	  *.tgz)
+	    myTGZ=" (a full tgz of ~/tpotce with data/ in your home directory)"
+	    myCOMMIT=$(fuOLD_TGZ_ROLLBACK_COMMIT "${myBACKUP}") && fuROLLBACK_OLD_TGZ "${myBACKUP}" "${myCOMMIT}" && myBACK="1" ;;
+	  ?*)
+	    fuCAN_ROLLBACK "${myBACKUP}" && fuROLLBACK_CHECKOUT "${myBACKUP}" && myBACK="1" ;;
+	esac
+	trap - INT TERM HUP
+	if [ -n "${myBACK}" ];
+	  then
+	    [ "${myWHY}" != "platform" ] || fuRESTART_AFTER_REFUSAL
+	    fuDID warn "Running update.sh again repeats the stop, the backup${myTGZ}, the refusal and the way back."
+	    [ "${myWHY}" != "platform" ] || fuDID next "Move T-Pot to a supported Debian host, ${myREADME}"
+	    exit 1
+	fi
+	fuUI_WARN "The earlier updater already stopped T-Pot; this refused run has not restarted it."
+	case "${myBACKUP}" in
+	  *.tgz)
+	    [ -n "${myCOMMIT}" ] || fuUI_HINT "The reflog of ~/tpotce does not name the commit before the pull of the update.sh before for certain."
+	    # after the reset the .env is the one of the commit, readable for others: the mode goes first
+	    myHINTS=("The way back by hand:"
+	             "git -C ~/tpotce reflog"
+	             "git -C ~/tpotce reset --hard ${myCOMMIT:-<the commit before the update>}"
+	             "chmod 600 ~/tpotce/.env")
+	    if [ -n "${myRESCUE}" ];
+	      then
+	        myHINTS+=("cat ${myRESCUE}/.env > ~/tpotce/.env"
+	                  "cat ${myRESCUE}/docker-compose.yml > ~/tpotce/docker-compose.yml")
+	      else
+	        myHINTS+=("tar xOf ${myBACKUP} .env > ~/tpotce/.env"
+	                  "tar xOf ${myBACKUP} docker-compose.yml > ~/tpotce/docker-compose.yml")
+	    fi
+	    # a hold keeps T-Pot from starting, resume-source ends it (below)
+	    [ "${myWHY}" != "platform" ] || myHINTS+=("sudo systemctl start tpot")
+	    fuUI_HINT "${myHINTS[@]}"
+	    fuDID warn "No safe way back to the release before, the hints above name the commands." ;;
+	  ?*)
+	    fuUI_HINT "The way back by hand: ~/tpotce/restore.sh -f ${myBACKUP} -c"
+	    fuDID warn "No safe way back to the release before, the hints above name the command." ;;
+	  *)
+	    fuDID warn "No backup of the updater before names the release to go back to." ;;
+	esac
+	if [ "${myWHY}" == "platform" ];
+	  then
+	    fuDID next "Move T-Pot to a supported Debian host, ${myREADME}"
+	elif [ -n "${myBACKUP}" ];
+	  then
+	    # resume-source on this release would start T-Pot with the data of the release before
+	    fuUI_HINT "After the way back: './tpot migrate resume-source --source ~/tpotce' in the checkout you exported with starts T-Pot again (then export anew)."
+	    fuDID next "Take the way back by hand first, then resume the source of the migration, the hints above name the commands."
+	fi
+	exit 1
 }
 
 # Where a copy of the Elasticsearch data by hand goes: next to the backups, unless the refusal was for want
@@ -3104,6 +3541,13 @@ function fuBACKUP () {
 	chmod -R go-rwx "${myStage}"
 
 	myTARGETS="MANIFEST rollback.txt tracked.patch"
+	if [ -n "${myMOBILE_SOURCE}" ]; then
+	    if ! docker image ls --digests --no-trunc --format '{{.Repository}}:{{.Tag}} {{.ID}} {{.Digest}}' > "${myStage}/images.txt"; then
+	        fuUI_ERROR "Could not record the pre-update image IDs for rollback."
+	        exit 1
+	    fi
+	    myTARGETS="${myTARGETS} images.txt"
+	fi
 	# Only name what is actually there, or tar stops at a missing member
 	[ -f "${myStage}/env" ]                && myTARGETS="${myTARGETS} env"
 	[ -f "${myStage}/docker-compose.yml" ] && myTARGETS="${myTARGETS} docker-compose.yml"
@@ -3405,11 +3849,6 @@ function fuKIBANA_OBJECTS_HINT () {
 }
 
 function fuRESTORE () {
-	if [ -f '~/tpotce/data/ews/conf/ews.cfg' ] && ! grep 'ews.cfg' $myCOMPOSEFILE > /dev/null; then
-	    echo
-	    fuUI_INFO "Restoring volume mount for ews.cfg in tpot.yml"
-	    sed -i '/- ${TPOT_DATA_PATH}:\/data/a \ \ \ \ \ - ${TPOT_DATA_PATH}/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg' $myCOMPOSEFILE
-	fi
 	fuUI_INFO "Restoring T-Pot config file .env"
 	fuTMPDIR
 	# `-C` only applies to the members named after it, hence it comes first. And the
@@ -4382,8 +4821,7 @@ function fuRESTORE_UNKNOWN () {
 	    if fuOLD_UPDATER_READ "${myARCHIVE}" && ! fuARCHIVE_MEMBER "${myARCHIVE}" docker-compose.yml > /dev/null;
 	      then
 	        myTYPE=$(fuARCHIVE_ENV "${myARCHIVE}" TPOT_TYPE)
-	        myEDITION="STANDARD"
-	        [ "${myTYPE}" != "SENSOR" ] || myEDITION="SENSOR"
+	        case "${myTYPE}" in SENSOR|MOBILE) myEDITION="${myTYPE}" ;; *) myEDITION="STANDARD" ;; esac
 	        fuUI_WARN "There was no docker-compose.yml before the update, the ${myEDITION} edition of this release is put in place (TPOT_TYPE ${myTYPE:-HIVE})."
 	        fuDID warn "There was no docker-compose.yml before the update, the ${myEDITION} edition of this release is put in place (TPOT_TYPE ${myTYPE:-HIVE})."
 	        return 1
@@ -4489,6 +4927,10 @@ function fuRESTORE_EDITION () {
 	if [ "${myEDITION}" == "CUSTOM" ];
 	  then
 	    fuRESTORE_CUSTOM
+	    if [ -n "${myMOBILE_SOURCE}" ]; then
+	        [ -z "${myCOMPOSE_KEPT}${myEDITION_MISSING}" ] || fuMOBILE_CONFLICT
+	        fuMOBILE_ENV
+	    fi
 	    echo
 	    return
 	fi
@@ -4504,6 +4946,7 @@ function fuRESTORE_EDITION () {
 	    fi
 	fi
 	[ "${myEDITION}" != "UNKNOWN" ] && myTEMPLATE=$(fuEDITION_TEMPLATE)
+	if [ -n "${myMOBILE_SOURCE}" ] && [ ! -f "${myTEMPLATE}" ]; then fuMOBILE_CONFLICT; fi
 	if [ -n "${myTEMPLATE}" ] && [ -f "${myTEMPLATE}" ];
 	  then
 	    if ! cp "${myTEMPLATE}" "$HOME/tpotce/docker-compose.yml";
@@ -4511,10 +4954,12 @@ function fuRESTORE_EDITION () {
 	        fuUI_ERROR "The ${myEDITION} edition could not be restored, please copy ${myTEMPLATE} to ~/tpotce/docker-compose.yml manually."
 	        fuDID warn "The ${myEDITION} edition could not be put in place, copy ${myTEMPLATE} to ~/tpotce/docker-compose.yml."
 	        myEDITION_MISSING="1"
+	        [ -z "${myMOBILE_SOURCE}" ] || exit 1
 	        echo
 	        return
 	    fi
 	    fuUI_OK "The ${myEDITION} edition is restored."
+	    fuMOBILE_ENV
 	    if [ -n "${myCOMPOSE_CUSTOMIZED}" ];
 	      then
 	        fuUI_WARN "Your docker-compose.yml had been modified. The ${myEDITION} edition of this release is in place now, please add your changes again."
@@ -4543,29 +4988,17 @@ function fuRESTORE_EDITION () {
 
 # The tpot command and compose/customizer.py need PyYAML and the venv module (for
 # the venv of tpot). The installer brings both along, older installations get them
-# here: Debian and Ubuntu split the venv module off into python3-venv, the other
-# distributions ship it with python3.
+# here: Debian splits the venv module off into python3-venv. The platform gate
+# (fuCHECK_HOST_PLATFORM) lets only Debian and Raspberry Pi OS get this far.
 function fuCUSTOMIZER_DEPS () {
-	local myPKGS=() myINSTALL=() myVENV=""
-	python3 -c "import ensurepip" 2>/dev/null || myVENV="1"
-	if command -v apt-get >/dev/null 2>&1;
-	  then
-	    python3 -c "import yaml" 2>/dev/null || myPKGS+=(python3-yaml)
-	    [ -n "${myVENV}" ] && myPKGS+=(python3-venv)
-	    myINSTALL=(env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq)
-	elif command -v dnf >/dev/null 2>&1;
-	  then
-	    python3 -c "import yaml" 2>/dev/null || myPKGS+=(python3-pyyaml)
-	    myINSTALL=(dnf -y -q install)
-	elif command -v zypper >/dev/null 2>&1;
-	  then
-	    python3 -c "import yaml" 2>/dev/null || myPKGS+=(python3-PyYAML)
-	    myINSTALL=(zypper -n -q install)
-	fi
+	local myPKGS=()
+	command -v apt-get >/dev/null 2>&1 || return
+	python3 -c "import yaml" 2>/dev/null || myPKGS+=(python3-yaml)
+	python3 -c "import ensurepip" 2>/dev/null || myPKGS+=(python3-venv)
 	[ ${#myPKGS[@]} -eq 0 ] && return
 	fuUI_INFO "Installing Python packages for tpot and compose/customizer.py ..."
-	[ "${myINSTALL[0]}" == "env" ] && sudo apt-get update -qq >/dev/null 2>&1
-	if sudo "${myINSTALL[@]}" "${myPKGS[@]}" >/dev/null 2>&1;
+	sudo apt-get update -qq >/dev/null 2>&1
+	if sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${myPKGS[@]}" >/dev/null 2>&1;
 	  then
 	    fuUI_OK "${myPKGS[*]} installed."
 	  else
@@ -4939,6 +5372,7 @@ function fuCHECK_DATA_LOSS () {
 	local myLOCAL=() myPULLABLE=() myBUILT=() myUNSURE=()
 	local myGIT=(git -C "$HOME/tpotce")
 	myLOSSES=0
+	fuMOBILE_PREFLIGHT
 	fuCHECK_BACKUP_SPACE
 	if [ -z "${myBACKUP_ONLY}" ];
 	  then
@@ -5108,16 +5542,16 @@ fuCHECK_STEP_WAIT || exit 1
 # A T-Pot host is Linux: elsewhere nothing of this works, it stops before any sudo, docker or
 # git; a checkout on macOS (configurations, ISO, images) follows its branch with git pull
 ( fuUI_LINUX_ONLY update.sh ) || {
-  fuUI_HINT "T-Pot runs on Linux only (Debian recommended). A checkout on macOS is updated with git pull." >&2
+  fuUI_HINT "T-Pot runs on Debian 13 (Raspberry Pi OS for T-Pot Mobile) only. A checkout on macOS is updated with git pull." >&2
   exit 1
 }
 
 # WSL2 is Linux to uname -s, but no T-Pot host (tpotinit stops there, its kernel names Microsoft):
-# no update before anything changes, only the backup to take T-Pot along to a Linux host
+# no update before anything changes, only the backup to take T-Pot along to a Debian host
 if [[ "$(uname -r 2>/dev/null)" =~ [Mm]icrosoft ]] && [ -z "${myBACKUP_ONLY}" ];
   then
     fuUI_ERROR "T-Pot no longer runs on WSL2, an update would not start there."
-    fuUI_HINT "Move it to a Linux host (Debian recommended)." \
+    fuUI_HINT "Move it to a Debian 13 (Raspberry Pi OS for T-Pot Mobile) host." \
               "update.sh --backup-only writes the backup to restore there." >&2
     exit 1
 fi
@@ -5164,8 +5598,18 @@ if [ -n "${myCHECK_LOSS}" ];
           else sudo () { "$@"; }
         fi
     fi
+    if [ -z "${myBACKUP_ONLY}" ];
+      then
+        if ! fuCHECK_MIGRATION_HOLD || ! fuCHECK_HOST_PLATFORM update;
+          then
+            [ -z "${myTMPDIR}" ] || rm -rf "${myTMPDIR}"
+            exit 1
+        fi
+    fi
     fuCHECK_DATA_LOSS
-    exit $?
+    myRC=$?
+    [ -z "${myTMPDIR}" ] || rm -rf "${myTMPDIR}"
+    exit "${myRC}"
 fi
 
 fuUI_BANNER "Updater" "Updates T-Pot to the latest version of its branch, with a backup first."
@@ -5189,15 +5633,20 @@ if ! sudo true;
     exit 1
 fi
 fuLOG_START
-# did T-Pot run when this run started? After a handover the update.sh before has stopped it already
-[ -n "${myPREPARED}" ] || myWAS_ACTIVE=$(systemctl is-active tpot 2>/dev/null)
 # a TPOT_ES_STEP_WAIT that fuCHECK_STEP_WAIT replaced after a handover
 fuSTEP_WAIT_WARN
 
 # --backup-only: the backup of an update, nothing else (i.e. before tpot uninstall)
 if [ -n "${myBACKUP_ONLY}" ];
   then
+    [ -n "${myPREPARED}" ] || myWAS_ACTIVE=$(systemctl is-active tpot 2>/dev/null)
     fuMARK phase check Checking the edition and the space
+    if fuMIGRATION_HELD;
+      then
+        myMIGRATION_HOLD="1"
+        fuUI_INFO "A migration holds T-Pot stopped (${myMIGRATION_GUARD}), the backup leaves it stopped."
+        fuMIGRATION_HINTS
+    fi
     fuOLD_UPDATER_CONFIG
     fuCHECK_EDITION
     fuCHECK_BACKUP_SPACE
@@ -5205,13 +5654,18 @@ if [ -n "${myBACKUP_ONLY}" ];
     fuEXPORT_ELASTIC
     fuSTOP_TPOT
     fuBACKUP
-    if [ -n "${mySTART}" ];
+    if [ -n "${myMIGRATION_HOLD}" ];
+      then
+        fuDID next "A migration holds T-Pot stopped, the backup is written."
+    elif [ -n "${mySTART}" ];
       then
         fuMARK phase start Starting T-Pot
-        if fuSTART_TPOT;
-          then fuDID ok "T-Pot is started again."
-          else fuDID warn "T-Pot did not start again, please start it yourself."
-        fi
+        fuSTART_TPOT
+        case "$?" in
+          0) fuDID ok "T-Pot is started again." ;;
+          2) fuDID next "A migration holds T-Pot stopped, the backup is written." ;;
+          *) fuDID warn "T-Pot did not start again, please start it yourself." ;;
+        esac
       else
         fuDID next "T-Pot is stopped, 'sudo systemctl start tpot' brings it back."
     fi
@@ -5224,6 +5678,11 @@ fuMARK phase check Checking the version and the source
 # the update.sh of the tag 24.04.1 and the one of the branch master of 2026-08-24 reset .env and
 # docker-compose.yml before they restarted into this one without a handover
 fuOLD_UPDATER_CONFIG
+fuCHECK_MIGRATION_HOLD || fuPLATFORM_REFUSED hold
+fuCHECK_HOST_PLATFORM update || fuPLATFORM_REFUSED platform
+# The service state is read only after the platform gate, so an unsupported host
+# is refused before the update's operational probes.
+[ -n "${myPREPARED}" ] || myWAS_ACTIVE=$(systemctl is-active tpot 2>/dev/null)
 fuCHECK_VERSION
 fuCHECKINET "https://index.docker.io https://github.com"
 fuCHECK_SOURCE
@@ -5297,6 +5756,11 @@ if [ -n "${mySTART}" ];
       then
         fuMARK phase "done" Done
         fuDID ok "T-Pot is started."
+    elif [ -n "${myMIGRATION_HOLD}" ];
+      then
+        myEND_TITLE="T-Pot is updated, but held by a migration"
+        fuDID fail "The update is through, but a migration holds T-Pot stopped."
+        exit 1
       else
         fuUI_ERROR "The update is through, but T-Pot is not running."
         [ -z "${myPULLOK}" ] && fuUI_HINT "The image pull failed earlier, which is the likely reason."

@@ -9,10 +9,11 @@ just does not run any more.
 
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
-import time
+from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -46,6 +47,7 @@ class SwitchPlan:
     warnings: List[str] = field(default_factory=list)
     needs_web_user: bool = False
     env_changes: Dict[str, str] = field(default_factory=dict)
+    wait_for_pairing: bool = False
 
 
 def role_of(key: str) -> str:
@@ -98,7 +100,7 @@ def plan(target: str, repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = 
     unchanged = known and generated.without_stamp(_read(in_use)) == generated.without_stamp(_read(edition_file))
     if name.lower() == choice.key and unchanged:
         raise EditionError(f"the {choice.title} edition runs here already")
-    stamp = time.strftime("%Y%m%d%H%M%S")
+    stamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
     # without a docker-compose.yml there is nothing to keep
     keep = "" if name == "none" else os.path.join(backup_dir, f"docker-compose_{name.lower()}_{stamp}.yml")
     result = SwitchPlan(choice, name, keep)
@@ -115,11 +117,15 @@ def plan(target: str, repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = 
     if choice.role == "SENSOR" and was != "SENSOR":
         result.warnings.append("Kibana, Elasticsearch and the Attack Map stop, their data in data/elk stays. "
                                "The sensor sends its events after 'tpot sensors add' on its HIVE.")
-    if choice.role != "SENSOR" and was == "SENSOR":
-        # a HIVE (and MOBILE, which installs with TPOT_TYPE=HIVE too) is no SENSOR any more
-        if env.get("TPOT_TYPE") == "SENSOR":
-            result.env_changes["TPOT_TYPE"] = "HIVE"
-        result.needs_web_user = choice.role == "HIVE" and not users_ok
+    result.wait_for_pairing = choice.role == "SENSOR" and ("MOBILE" in (role_of(base or name), env.get("TPOT_TYPE")))
+    if result.wait_for_pairing:
+        result.warnings.append("T-Pot stays stopped until you pair this sensor from its HIVE.")
+    runtime = env.get("TPOT_TYPE")
+    # An unpaired sensor uses the installer default until its HIVE pairs it.
+    desired = "HIVE" if choice.role == "SENSOR" and (runtime != "SENSOR" or result.wait_for_pairing) else choice.role
+    if runtime != desired:
+        result.env_changes["TPOT_TYPE"] = desired
+    result.needs_web_user = choice.role == "HIVE" and not users_ok
     return result
 
 
@@ -168,7 +174,11 @@ def _switch(plan: SwitchPlan, repo_dir: str, become_file: str, run: Callable, li
         if run(["sudo"] + list(args)).returncode != 0:
             raise EditionError(f"{what} failed: sudo {' '.join(args)}")
 
+    if plan.needs_web_user and add_user is None:
+        raise EditionError("a HIVE needs a web user before switching")
     in_use = ops.compose_path(repo_dir)
+    env_path = os.path.join(repo_dir, ".env")
+    env_copy = plan.keep_copy + ".env" if plan.keep_copy and (plan.env_changes or add_user) else ""
     # how T-Pot is before the switch: the way back goes back to it (a T-Pot stopped on purpose stays so)
     before = _state(run) if linux else ""
     # 1. up to the swap a ctrl+c goes back
@@ -181,21 +191,27 @@ def _switch(plan: SwitchPlan, repo_dir: str, become_file: str, run: Callable, li
             _mark("keep", "Keeping the compose file in use")
             os.makedirs(os.path.dirname(plan.keep_copy), exist_ok=True)
             shutil.copy2(in_use, plan.keep_copy)
+            if env_copy:
+                with open(env_path, "rb") as src, os.fdopen(os.open(
+                        env_copy, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as dst:
+                    shutil.copyfileobj(src, dst)
             say.ok(f"docker-compose.yml is kept as {plan.keep_copy}.")
     except EditionError:
         if not interrupts:          # a stop that failed by itself: nothing is changed
             raise
     if interrupts:
         _go_back(plan, linux, sudo, run, before)
+    back = (f"Back to the edition before: cp {shlex.quote(plan.keep_copy)} {shlex.quote(in_use)}"
+            if plan.keep_copy else "Nothing to go back to, there was no docker-compose.yml before.")
+    if env_copy:
+        back += f" && cp {shlex.quote(env_copy)} {shlex.quote(env_path)}"
     _mark("swap", f"Switching to the {plan.target.title} edition")
     try:
         shutil.copyfile(plan.target.path, in_use)
         generated.stamp_file(in_use, repo_dir, "compose")
     except (OSError, generated.GeneratedError) as err:
-        raise EditionError(f"{err}. T-Pot is stopped; the edition could not be prepared.") from err
+        raise EditionError(f"{err}. The edition could not be prepared. {back}") from err
     say.ok(f"docker-compose.yml is the {plan.target.title} edition now.")
-    back = f"Back to the edition before: cp {plan.keep_copy} {in_use}" if plan.keep_copy else \
-        "Nothing to go back to, there was no docker-compose.yml before."
     # 2. from here on a ctrl+c finishes the switch
     # .env and the web user before the start: tpotinit refuses a HIVE without a web user
     try:
@@ -212,14 +228,18 @@ def _switch(plan: SwitchPlan, repo_dir: str, become_file: str, run: Callable, li
     except Exception as err:      # SettingsError, UsersError, OSError: T-Pot is not started like that
         raise EditionError(f"{err}. T-Pot is stopped. {back}")
     if not linux:
-        say.info("This is no T-Pot host, nothing is started: T-Pot runs on Linux (Debian recommended).")
+        say.info("This is no T-Pot host, nothing is started: T-Pot runs on Debian 13 (Raspberry Pi OS for T-Pot Mobile).")
         return
     _mark("prune", "Removing the networks of the old edition")
     try:
         sudo("docker", "network", "prune", "-f", what="Removing the old networks")
-    except EditionError:
+    except EditionError as err:
         if not interrupts:
-            raise
+            raise EditionError(f"{err}. {back}") from err
+    if plan.wait_for_pairing:
+        _mark("done", "Ready for pairing")
+        say.info("The sensor is prepared, not started. Pair it with 'tpot sensors add' on the HIVE.")
+        return
     _mark("start", "Starting T-Pot")
     say.info("Starting T-Pot, it pulls the images it does not have yet ...")
     try:

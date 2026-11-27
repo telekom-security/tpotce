@@ -1,6 +1,8 @@
 """tpot sensors: registry, access, SSH, certificate and status, on a temporary checkout."""
 
 import base64
+import fcntl
+import http.client
 import importlib.util
 import io
 import json
@@ -23,7 +25,7 @@ from tpotctl.tests import AsyncTestCase, isolate  # noqa: E402
 
 isolate()   # keeps the user's config out of the tests
 
-from tpotctl import sensors, users  # noqa: E402
+from tpotctl import sensor_probe, sensors, users  # noqa: E402
 from tpotctl.bootstrap import REPO_DIR  # noqa: E402
 from tpotctl.envfile import EnvFile  # noqa: E402
 
@@ -2997,6 +2999,130 @@ class SensorsPaneTest(AsyncTestCase):
                     await pilot.pause()
                     self.assertEqual(str(dialog.query_one(hint).render()).strip(), "")
 
+    async def test_hive_address_dialog_proposes_and_checks(self):
+        """The address this HIVE reaches its sensors from is the proposal (looked up in a thread, an empty
+        field takes it), an IPv6 address stays in the dialog, without a proposal an empty field is a problem."""
+        import threading
+        from textual.app import App
+        from tpotctl.screens.dialogs import HIVE_PLACEHOLDER, HiveAddressDialog
+        results, threads = [], []
+
+        def propose():
+            threads.append(threading.current_thread() is threading.main_thread())
+            return "198.51.100.7"
+        dialog = HiveAddressDialog(["192.0.2.1"], propose, sensors.check_hive_address)
+        app = App()
+        async with app.run_test() as pilot:
+            app.push_screen(dialog, results.append)
+            await pilot.pause(0.3)
+            self.assertEqual(dialog.query_one("#hive-address").placeholder, f"{HIVE_PLACEHOLDER} [198.51.100.7]")
+            dialog.query_one("#hive-address").value = "2001:db8::1"
+            await pilot.click("#hive-address-change")
+            await pilot.pause(0.3)          # a button takes no second click while it is -active (0.2 s)
+            self.assertIn("IPv6", flat(str(dialog.query_one("#hive-address-hint").render())))
+            self.assertIs(app.screen, dialog)
+            dialog.query_one("#hive-address").value = ""
+            await pilot.click("#hive-address-change")
+            await pilot.pause()
+        self.assertEqual(threads, [False])
+        self.assertEqual(results, [{"address": "198.51.100.7", "nopass": False}])
+        for propose in (None, lambda: "", lambda: 1 / 0):
+            with self.subTest(propose=propose):
+                dialog = HiveAddressDialog(["192.0.2.1"], propose, sensors.check_hive_address)
+                app = App()
+                async with app.run_test() as pilot:
+                    app.push_screen(dialog, results.append)
+                    await pilot.pause(0.3)
+                    self.assertEqual(dialog.query_one("#hive-address").placeholder, HIVE_PLACEHOLDER)
+                    await pilot.click("#hive-address-change")
+                    await pilot.pause()
+                    self.assertIs(app.screen, dialog)
+                    self.assertIn("address", flat(str(dialog.query_one("#hive-address-hint").render())))
+        self.assertEqual(len(results), 1)
+
+    async def test_hive_address_dialog_names_the_current_addresses(self):
+        from textual.app import App
+        from textual.widgets import Static
+        from tpotctl.screens.dialogs import HiveAddressDialog
+        for current in (["192.0.2.1"], ["192.0.2.1", "hive.example.org"]):
+            with self.subTest(current=current):
+                dialog = HiveAddressDialog(current)
+                app = App()
+                async with app.run_test() as pilot:
+                    app.push_screen(dialog)
+                    await pilot.pause()
+                    text = flat(" ".join(str(widget.render()) for widget in dialog.query(Static)))
+                for address in current:
+                    self.assertIn(address, text)
+
+    def hive_address_backend(self):
+        """The Sensors page of a HIVE with one sensor whose place is known (host, login, HIVE address)."""
+        repo, backend = self.heartbeat_backend()
+        registry = sensors.Registry(repo, hasher=fake_hash)
+        registry.sensors()
+        registry.update("sensor-old-otter", host="192.0.2.10", ssh_user="debian", hive_address="192.0.2.1")
+        return repo, backend
+
+    async def test_sensors_pane_runs_hive_address(self):
+        from tpotctl import app as tapp
+        from tpotctl.screens.dialogs import HiveAddressDialog
+        _repo, backend = self.hive_address_backend()
+        commands, hosts = [], []
+        app = tapp.TpotApp(backend=backend, runner=lambda command, cwd=None: commands.append((command, cwd)) or 0)
+        with mock.patch.object(sensors, "default_hive_address",
+                               side_effect=lambda host: hosts.append(host) or "198.51.100.7"):
+            async with app.run_test(size=(120, 40)) as pilot:
+                await pilot.pause(0.5)
+                app.goto("sensors")
+                await pilot.pause(0.4)
+                pane = app.query_one("#sensors")
+                for nopass, extra in ((False, []), (True, ["--no-become-pass"])):
+                    with self.subTest(nopass=nopass):
+                        await pilot.click("#sensor-hive-address")
+                        await pilot.pause(0.3)
+                        self.assertIsInstance(app.screen, HiveAddressDialog)
+                        self.assertEqual(app.screen.current, ["192.0.2.1"])
+                        app.screen.query_one("#hive-address-nopass").value = nopass
+                        with mock.patch.object(pane, "load") as load:
+                            await pilot.click("#hive-address-change")
+                            await pilot.pause(0.3)
+                        self.assertEqual(commands[-1], ([tapp.LAUNCHER, "sensors", "hive-address", "198.51.100.7"]
+                                                        + extra, tapp.REPO_DIR))
+                        load.assert_called_with()
+                await pilot.click("#sensor-hive-address")
+                await pilot.pause(0.3)
+                await pilot.click("#hive-address-back")
+                await pilot.pause(0.3)
+        self.assertEqual(len(commands), 2)
+        self.assertEqual(hosts, ["192.0.2.10"] * 3)
+
+    async def test_hive_address_button_disabled_without_sensors(self):
+        """Off without a registered sensor (nothing to change: a sensor of lswebpasswd alone is taken over
+        first) and when the registry cannot be read."""
+        from tpotctl import app as tapp
+        repo, backend = self.hive_address_backend()
+        empty = checkout(self, ls_web_user="")
+        found = checkout(self, ls_web_user="")
+        with open(os.path.join(found, "data", "nginx", "conf", "lswebpasswd.lost"), "w") as handle:
+            handle.write(f"{LYNX}\n")
+
+        def unreadable():
+            raise sensors.SensorsError("sensors.json cannot be read")
+        for label, registry in (("registered", lambda: sensors.Registry(repo, hasher=fake_hash)),
+                                ("none", lambda: sensors.Registry(empty, hasher=fake_hash)),
+                                ("taken over first", lambda: sensors.Registry(found, hasher=fake_hash)),
+                                ("unreadable", unreadable)):
+            with self.subTest(label):
+                backend.sensors = registry
+                app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+                async with app.run_test(size=(120, 40)) as pilot:
+                    await pilot.pause(0.5)
+                    app.goto("sensors")
+                    await pilot.pause(0.4)
+                    self.assertEqual(app.query_one("#sensor-hive-address").disabled, label != "registered")
+                    if label == "taken over first":
+                        self.assertEqual(app.query_one("#sensors-table").row_count, 1)
+
     async def test_edit_where_a_sensor_is(self):
         from tpotctl import app as tapp, ops
         from tpotctl.screens.dialogs import SensorEditDialog
@@ -3465,3 +3591,818 @@ class SensorCertPlayTest(unittest.TestCase):
         done = subprocess.run(["ansible-playbook", "--syntax-check", "-i", "localhost,", self.PLAY],
                               capture_output=True, text=True, timeout=120)
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+
+
+class SensorProbeTest(unittest.TestCase):
+    """tpotctl/sensor_probe.py reads a sensor over SSH: standard library only, it changes and creates nothing."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.home = self.temporary.name
+        self.repo = os.path.join(self.home, "tpotce")
+        self.os_release = os.path.join(self.home, "os-release")
+        self.hold = os.path.join(self.home, "90-tpot-migration.conf")
+        self.write("version", "24.04.1\n")
+        self.write(".env", "TPOT_TYPE=SENSOR\nTPOT_HIVE_IP=192.0.2.1\n")
+        self.write("docker-compose.yml", "services:\n\n  tpotinit:\n    image: a\n\n  logstash:\n    image: b\n")
+        with open(self.os_release, "w", encoding="utf-8") as handle:
+            handle.write('PRETTY_NAME="Debian GNU/Linux 13 (trixie)"\nID=debian\n')
+
+    def write(self, name, text):
+        path = os.path.join(self.repo, name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        return path
+
+    def probe(self):
+        return sensor_probe.probe(self.home, os_release=self.os_release, hold=self.hold)
+
+    def test_probe_reads_a_24041_sensor(self):
+        self.assertEqual(self.probe(), {"version": "24.04.1", "os_id": "debian", "hold": False,
+                                        "update_locked": False, "hive_ip": "192.0.2.1",
+                                        "services": ["tpotinit", "logstash"], "role": "SENSOR"})
+
+    def test_probe_reads_the_role(self):
+        self.write(".env", 'TPOT_TYPE=SENSOR\nTPOT_TYPE: "HIVE"\n')
+        self.assertEqual(self.probe()["role"], "HIVE")
+        self.write(".env", "TPOT_HIVE_IP=192.0.2.1\n")
+        self.assertIsNone(self.probe()["role"])
+
+    def test_probe_drops_comments_as_compose_does(self):
+        cases = {"TPOT_HIVE_IP=192.0.2.1 # old\n": "192.0.2.1",
+                 'TPOT_HIVE_IP: "hive.example" # old\n': "hive.example",
+                 "TPOT_HIVE_IP='a # b'\n": "a # b",
+                 "TPOT_HIVE_IP=a#b\n": "a#b"}
+        for text, value in cases.items():
+            with self.subTest(text):
+                self.write(".env", "TPOT_TYPE=SENSOR # set by deploy\n" + text)
+                self.assertEqual((self.probe()["hive_ip"], self.probe()["role"]), (value, "SENSOR"))
+
+    # what docker compose v5.7.1 reads (--env-file, the parser of env_file): on a sensor compose hands the
+    # .env to tpotinit (env_file) and to Fluent Bit (${TPOT_HIVE_IP}), its reading is the one that counts
+    COMPOSE_READS = {"  TPOT_HIVE_IP = 192.0.2.1\n": "192.0.2.1",
+                     "TPOT_HIVE_IP:\t192.0.2.1\n": "192.0.2.1",
+                     "TPOT_HIVE_IP:192.0.2.1\n": "192.0.2.1",
+                     "TPOT_HIVE_IP :192.0.2.1\n": "192.0.2.1",
+                     "export TPOT_HIVE_IP=192.0.2.1\n": "192.0.2.1",
+                     'TPOT_HIVE_IP="x" # c\n': "x",
+                     "TPOT_HIVE_IP=\n": "",
+                     "#TPOT_HIVE_IP=1\n": None}
+
+    def test_probe_reads_the_lines_compose_reads(self):
+        for text, value in self.COMPOSE_READS.items():
+            with self.subTest(text):
+                self.write(".env", text)
+                self.assertEqual(self.probe()["hive_ip"], value)
+
+    @unittest.skipUnless(shutil.which("docker"), "needs docker compose")
+    def test_probe_reads_what_docker_compose_reads(self):
+        compose = self.write("compose.yml", 'services:\n  t:\n    image: busybox\n'
+                                            '    environment:\n      A: "${TPOT_HIVE_IP-unset}"\n')
+        cases = dict(self.COMPOSE_READS)
+        cases.update({"TPOT_HIVE_IP=192.0.2.1 # old\n": "192.0.2.1", "TPOT_HIVE_IP: \"hive.example\" # old\n":
+                      "hive.example", "TPOT_HIVE_IP='a # b'\n": "a # b", "TPOT_HIVE_IP=a#b\n": "a#b",
+                      'TPOT_HIVE_IP=a\nTPOT_HIVE_IP: "b"\n': "b"})
+        for text, value in cases.items():
+            with self.subTest(text):
+                path = self.write(".env", text)
+                done = subprocess.run(["docker", "compose", "--env-file", path, "-f", compose, "config",
+                                       "--format", "json"], capture_output=True, text=True, timeout=60,
+                                      env={key: item for key, item in os.environ.items() if key != "TPOT_HIVE_IP"})
+                if done.returncode:
+                    self.skipTest(f"docker compose config: {done.stderr.strip()}")
+                read = json.loads(done.stdout)["services"]["t"]["environment"]["A"]
+                self.assertEqual(self.probe()["hive_ip"], None if read == "unset" else read)
+                self.assertEqual(self.probe()["hive_ip"], value)
+
+    def test_probe_takes_the_last_line_and_both_forms(self):
+        self.write(".env", 'TPOT_HIVE_IP=a\n#TPOT_HIVE_IP=c\nTPOT_HIVE_IP: "b"\n# TPOT_HIVE_IP=d\n')
+        self.assertEqual(self.probe()["hive_ip"], "b")
+        self.write(".env", "TPOT_HIVE_IP = 'e' \nTPOT_HIVE_IPS=f\n")
+        self.assertEqual(self.probe()["hive_ip"], "e")
+        self.write(".env", "TPOT_TYPE=SENSOR\n")
+        self.assertIsNone(self.probe()["hive_ip"])
+        os.remove(os.path.join(self.repo, ".env"))
+        self.assertIsNone(self.probe()["hive_ip"])
+
+    def test_probe_follows_tpot_docker_compose(self):
+        self.write(os.path.join("compose", "x.yml"), "services:\n  tpotinit:\n  fluentbit:\n")
+        self.write(".env", "TPOT_HIVE_IP=192.0.2.1\nTPOT_DOCKER_COMPOSE=./compose/x.yml\n")
+        self.assertEqual(self.probe()["services"], ["tpotinit", "fluentbit"])
+        elsewhere = os.path.join(self.home, "elsewhere.yml")
+        with open(elsewhere, "w", encoding="utf-8") as handle:
+            handle.write("services:\n  nginx:\n")
+        self.write(".env", f'TPOT_DOCKER_COMPOSE: "{elsewhere}"\n')
+        self.assertEqual(self.probe()["services"], ["nginx"])
+        self.write(".env", "TPOT_DOCKER_COMPOSE=./missing.yml\n")
+        self.assertEqual(self.probe()["services"], [])
+
+    def test_probe_sees_a_held_update_lock_and_creates_none(self):
+        lock = os.path.join(self.home, ".local", "share", "tpotce", "update.lock")
+        self.assertFalse(self.probe()["update_locked"])
+        self.assertFalse(os.path.lexists(os.path.join(self.home, ".local")))
+        os.makedirs(os.path.dirname(lock))
+        with open(lock, "w", encoding="utf-8"):
+            pass
+        self.assertFalse(self.probe()["update_locked"])
+        holder = os.open(lock, os.O_RDWR)
+        self.addCleanup(os.close, holder)
+        fcntl.flock(holder, fcntl.LOCK_EX)
+        self.assertTrue(self.probe()["update_locked"])
+        fcntl.flock(holder, fcntl.LOCK_UN)
+        self.assertFalse(self.probe()["update_locked"])
+        # update.sh refuses a link there, so no update holds it; the probe does not follow it
+        target = lock + ".target"
+        os.rename(lock, target)
+        os.symlink(target, lock)
+        fcntl.flock(holder, fcntl.LOCK_EX)
+        self.assertFalse(self.probe()["update_locked"])
+
+    def test_probe_hold_and_os_release(self):
+        with open(self.hold, "w", encoding="utf-8"):
+            pass
+        with open(self.os_release, "w", encoding="utf-8") as handle:
+            handle.write('ID="ubuntu"\nID_LIKE=debian\n')
+        probe = self.probe()
+        self.assertTrue(probe["hold"])
+        self.assertEqual(probe["os_id"], "ubuntu")
+        os.remove(self.os_release)
+        os.remove(os.path.join(self.repo, "version"))
+        probe = self.probe()
+        self.assertEqual((probe["os_id"], probe["version"]), ("", ""))
+        # the guard update.sh refuses on, written by migration_runtime
+        with open(os.path.join(REPO_DIR, "update.sh"), encoding="utf-8") as handle:
+            self.assertIn(f"TPOT_MIGRATION_GUARD:-{sensor_probe.HOLD}}}", handle.read())
+
+    def test_probe_runs_from_stdin(self):
+        with open(sensor_probe.__file__, encoding="utf-8") as handle:
+            source = handle.read()
+        done = subprocess.run([sys.executable, "-"], input=source, capture_output=True, text=True, timeout=60,
+                              cwd=self.home, env={"HOME": self.home, "PATH": os.environ.get("PATH", "")})
+        self.assertEqual(done.returncode, 0, done.stderr)
+        answer = json.loads(done.stdout)
+        self.assertEqual(set(answer), {"version", "os_id", "hold", "update_locked", "hive_ip", "services", "role"})
+        self.assertEqual((answer["version"], answer["hive_ip"]), ("24.04.1", "192.0.2.1"))
+
+    def test_probe_sensor_parses_and_fails_clearly(self):
+        sensor = sensors.Sensor("s1", host="192.0.2.10", ssh_user="tsec", ssh_port=64295)
+        answer = {"version": "24.04.2", "os_id": "debian", "hold": False, "update_locked": False,
+                  "hive_ip": None, "services": ["fluentbit"], "role": "SENSOR"}
+        calls = []
+
+        def run(command, **kwargs):
+            calls.append((command, kwargs))
+            return subprocess.CompletedProcess(command, 0, json.dumps(answer), "")
+
+        self.assertEqual(sensors.probe_sensor(sensor, run=run), sensors.Probe(**answer))
+        command, kwargs = calls[0]
+        self.assertEqual(command, sensors.ssh_command("192.0.2.10", "tsec", "python3", "-", port=64295))
+        self.assertEqual(command[-2:], ["python3", "-"])
+        with open(sensor_probe.__file__, encoding="utf-8") as handle:
+            self.assertEqual(kwargs["input"], handle.read())
+        self.assertEqual(kwargs["timeout"], 15)
+
+        def answering(result):
+            def run(command, **kwargs):
+                if isinstance(result, BaseException):
+                    raise result
+                return result
+            return run
+
+        refused = "ssh: connect to host 192.0.2.10 port 64295: Connection refused\n"
+        for result in (subprocess.CompletedProcess([], 255, "", refused), subprocess.TimeoutExpired("ssh", 15),
+                       OSError("no ssh"), subprocess.CompletedProcess([], 0, "x", ""),
+                       subprocess.CompletedProcess([], 0, json.dumps(dict(answer, hold="no")), ""),
+                       subprocess.CompletedProcess([], 0, json.dumps(dict(answer, services=[1])), ""),
+                       subprocess.CompletedProcess([], 0, json.dumps({"version": "24.04.2"}), "")):
+            with self.subTest(result=result), self.assertRaisesRegex(sensors.SensorsError, "^s1 cannot be checked"):
+                sensors.probe_sensor(sensor, run=answering(result))
+        with self.assertRaisesRegex(sensors.SensorsError, "Connection refused"):
+            sensors.probe_sensor(sensor, run=answering(subprocess.CompletedProcess([], 255, "", refused)))
+
+    def test_probe_sensor_cleans_what_the_sensor_says(self):
+        sensor = sensors.Sensor("s1", host="192.0.2.10", ssh_user="tsec", ssh_port=64295)
+        answer = {"version": "24.04.2", "os_id": "debian", "hold": False, "update_locked": False,
+                  "hive_ip": "192.0.2.1", "services": ["tpotinit", "fluentbit"], "role": "SENSOR"}
+
+        def answering(stdout, stderr="", code=0):
+            return lambda command, **kwargs: subprocess.CompletedProcess(command, code, stdout, stderr)
+
+        # what a login file of the sensor prints comes before the answer
+        greeting = "Welcome to T-Pot\n\n" + json.dumps(answer) + "\n\n"
+        self.assertEqual(sensors.probe_sensor(sensor, run=answering(greeting)), sensors.Probe(**answer))
+        for key, value in (("os_id", "Ubuntu"), ("os_id", "debian\x1b[2J"), ("os_id", "d" * 65),
+                           ("version", "24.04.2\x1b]0;x\x07"), ("version", "2" * 129),
+                           ("hive_ip", "192.0.2.1\x1b[31m"), ("hive_ip", "h" * 254), ("hive_ip", "hive\nx"),
+                           ("role", "SENSOR\r"), ("role", "S" * 65), ("services", ["flu entbit"]),
+                           ("services", ["\x1b"]), ("services", ["s" * 65]), ("services", ["s"] * 257)):
+            with self.subTest(key=key, value=value), \
+                    self.assertRaisesRegex(sensors.SensorsError, "^s1 cannot be checked"):
+                sensors.probe_sensor(sensor, run=answering(json.dumps(dict(answer, **{key: value}))))
+        for key, value in (("os_id", ""), ("version", ""), ("hive_ip", ""), ("hive_ip", "a # b"),
+                           ("role", None), ("services", [])):
+            with self.subTest(key=key, value=value):
+                sensors.probe_sensor(sensor, run=answering(json.dumps(dict(answer, **{key: value}))))
+        noisy = "ssh: \x1b[31mconnect\x07 to host" + "x" * 500 + "\n"
+        with self.assertRaises(sensors.SensorsError) as caught:
+            sensors.probe_sensor(sensor, run=answering("", noisy, 255))
+        message = str(caught.exception)
+        self.assertIn("ssh: [31mconnect to host", message)
+        self.assertFalse(any(not char.isprintable() for char in message), message)
+        self.assertLess(len(message), 300)
+
+
+class HiveAddressRulesTest(unittest.TestCase):
+    """The rules of tpot sensors hive-address that need neither SSH nor Elasticsearch."""
+
+    SINCE = 1_800_000_000.0
+
+    @staticmethod
+    def probe(**changes):
+        values = dict(version="24.04.2", os_id="debian", hold=False, update_locked=False,
+                      hive_ip="192.0.2.1", services=["tpotinit", "fluentbit"], role="SENSOR")
+        values.update(changes)
+        return sensors.Probe(**values)
+
+    def test_check_kind(self):
+        self.assertEqual(sensors.check_kind(self.probe()), "heartbeat")
+        self.assertEqual(sensors.check_kind(self.probe(version="24.04.1", services=["logstash"])), "refused")
+        self.assertEqual(sensors.check_kind(self.probe(services=["logstash"])), "logstash")
+        self.assertEqual(sensors.check_kind(self.probe(services=[])), "none")
+
+    def test_hive_skip_reason_order(self):
+        self.assertEqual(sensors.hive_skip_reason(self.probe(), "s1"), "")
+        version = sensors.hive_skip_reason(self.probe(version="", role="HIVE", os_id="ubuntu", hold=True,
+                                                      update_locked=True), "s1")
+        self.assertIn("~/tpotce/version cannot be read", version)
+        # a host of the registry that is a HIVE (this one, say): a restart there stops its Elasticsearch
+        role = sensors.hive_skip_reason(self.probe(role="HIVE", os_id="ubuntu", hold=True, update_locked=True), "s1")
+        for text in ("no SENSOR", "TPOT_TYPE=HIVE"):
+            self.assertIn(text, role)
+        self.assertIn("no TPOT_TYPE", sensors.hive_skip_reason(self.probe(role=None), "s1"))
+        system = sensors.hive_skip_reason(self.probe(os_id="ubuntu", hold=True, update_locked=True), "s1")
+        for text in ("ubuntu", "Debian", "tpot sensors add", "tpot migrate"):
+            self.assertIn(text, system)
+        hold = sensors.hive_skip_reason(self.probe(hold=True, update_locked=True), "s1")
+        self.assertIn("migration", hold)
+        locked = sensors.hive_skip_reason(self.probe(update_locked=True), "s1")
+        self.assertIn("an update runs there, try again after it", locked)
+        for reason in (version, role, system, hold, locked):
+            self.assertTrue(reason.startswith("s1"), reason)
+        self.assertEqual(len({version, role, system, hold, locked}), 5)
+        self.assertIn("an unknown system", sensors.hive_skip_reason(self.probe(os_id=""), "s1"))
+        self.assertIn("~/tpotce/version", sensors.hive_skip_reason(self.probe(version="24.04.2\nx"), "s1"))
+
+    def test_confirmed_by_heartbeat(self):
+        beats = {"s1": sensors.Heartbeat(self.SINCE + 5, "24.04.2", "B")}
+        self.assertTrue(sensors.confirmed("heartbeat", "s1", beats, {}, self.SINCE, "A"))
+        self.assertTrue(sensors.confirmed("heartbeat", "s1", beats, {}, self.SINCE, ""))
+        at_once = {"s1": sensors.Heartbeat(self.SINCE, "24.04.2", "B")}
+        self.assertTrue(sensors.confirmed("heartbeat", "s1", at_once, {}, self.SINCE, "A"))
+        before = {"s1": sensors.Heartbeat(self.SINCE - 1, "24.04.2", "B")}
+        self.assertFalse(sensors.confirmed("heartbeat", "s1", before, {}, self.SINCE, "A"))
+        self.assertFalse(sensors.confirmed("heartbeat", "s2", beats, {}, self.SINCE, "A"))
+
+    def test_confirmed_ignores_a_buffered_heartbeat(self):
+        buffered = {"s1": sensors.Heartbeat(self.SINCE + 30, "24.04.2", "A")}
+        self.assertFalse(sensors.confirmed("heartbeat", "s1", buffered, {}, self.SINCE, "A"))
+
+    def test_confirmed_by_refusal(self):
+        self.assertTrue(sensors.confirmed("refused", "s1", {}, {"s1": self.SINCE}, self.SINCE, ""))
+        self.assertFalse(sensors.confirmed("refused", "s1", {}, {"s1": self.SINCE - 1}, self.SINCE, ""))
+        self.assertFalse(sensors.confirmed("refused", "s2", {}, {"s1": self.SINCE}, self.SINCE, ""))
+        beats = {"s1": sensors.Heartbeat(self.SINCE + 5, "24.04.2", "B")}
+        for kind in ("logstash", "none"):
+            self.assertFalse(sensors.confirmed(kind, "s1", beats, {"s1": self.SINCE + 5}, self.SINCE, "A"), kind)
+
+    def test_fetch_heartbeats_raises_sensors_error(self):
+        def refused(request, timeout):
+            raise urllib.error.URLError("connection refused")
+
+        def garbage(request, timeout):
+            return io.BytesIO(b"[]")
+
+        class Cut(io.BytesIO):
+            def read(self, *args):
+                raise http.client.IncompleteRead(b"")
+
+        def cut(request, timeout):
+            return Cut()
+
+        def empty(request, timeout):
+            self.assertIn("/tpot-sensor-status/_search", request.full_url)
+            return io.BytesIO(json.dumps({"timed_out": False, "_shards": {"failed": 0},
+                                          "hits": {"hits": []}}).encode())
+
+        with self.assertRaisesRegex(sensors.SensorsError, "connection refused"):
+            sensors.fetch_heartbeats("http://es.test", refused)
+        with self.assertRaises(sensors.SensorsError):
+            sensors.fetch_heartbeats("http://es.test", garbage)
+        with self.assertRaisesRegex(sensors.SensorsError, "cannot be asked"):
+            sensors.fetch_heartbeats("http://es.test", cut)
+        self.assertEqual(sensors.fetch_heartbeats("http://es.test", empty), ({}, {}))
+
+    def test_hive_address_command(self):
+        play = os.path.join("/repo", "installer", "install", "sensor_hive.yml")
+        self.assertEqual(sensors.hive_address_command("/tmp/inv", "198.51.100.7", repo_dir="/repo"),
+                         ["ansible-playbook", play, "-i", "/tmp/inv", "-e", "tpot_hive_address=198.51.100.7",
+                          "--ask-become-pass"])
+        self.assertEqual(sensors.hive_address_command("/tmp/inv", "hive.example", False, repo_dir="/repo"),
+                         ["ansible-playbook", play, "-i", "/tmp/inv", "-e", "tpot_hive_address=hive.example"])
+        for address in ("2001:db8::1", "a b", "x tpot_shipper_since=1"):
+            with self.subTest(address), self.assertRaises(sensors.SensorsError):
+                sensors.hive_address_command("/tmp/inv", address)
+
+
+class SensorHivePlayTest(unittest.TestCase):
+    """installer/install/sensor_hive.yml: the certificate, TPOT_HIVE_IP of the sensor, a restart of T-Pot."""
+
+    PLAY = os.path.join(REPO_DIR, "installer", "install", "sensor_hive.yml")
+    CERT_PLAY = os.path.join(REPO_DIR, "installer", "install", "sensor_cert.yml")
+    NAMES = ["Check the HIVE address", "Copy the HIVE certificate to the sensor", "Read the T-Pot configuration",
+             "Set the HIVE address", "Restart T-Pot"]
+    ADDRESS = "198.51.100.7"
+
+    def setUp(self):
+        if yaml is None:
+            self.skipTest("needs PyYAML")
+        with open(self.PLAY, encoding="utf-8") as handle:
+            self.play = yaml.safe_load(handle)[0]
+        self.tasks = {task["name"]: task for task in self.play["tasks"]}
+
+    def run_play(self, env_file, address=ADDRESS, tags=("--tags", "tpot_env")):
+        return subprocess.run(["ansible-playbook", self.PLAY, "-c", "local", "-i", "localhost,", *tags,
+                               "-e", f"tpot_env_file={env_file}", "-e", f"tpot_hive_address={address}"],
+                              capture_output=True, text=True, timeout=300, env=dict(os.environ, ANSIBLE_NOCOLOR="1"))
+
+    def test_play_order_and_become(self):
+        self.assertEqual([task["name"] for task in self.play["tasks"]], self.NAMES)
+        self.assertEqual([task["name"] for task in self.play["tasks"] if task.get("become")],
+                         ["Copy the HIVE certificate to the sensor", "Restart T-Pot"])
+        self.assertNotIn("become", self.play)
+        with open(self.CERT_PLAY, encoding="utf-8") as handle:
+            cert_play = yaml.safe_load(handle)[0]
+        copy = next(task for task in cert_play["tasks"] if task["name"] == "Copy the HIVE certificate to the sensor")
+        self.assertEqual(self.tasks["Copy the HIVE certificate to the sensor"]["ansible.builtin.copy"],
+                         copy["ansible.builtin.copy"])
+        for key in ("local_nginx_cert_path", "remote_cert_path"):
+            self.assertEqual(self.play["vars"][key], cert_play["vars"][key])
+        restart = self.tasks["Restart T-Pot"]["ansible.builtin.systemd"]
+        self.assertEqual((restart["name"], restart["state"]), ("tpot", "restarted"))
+        for name in ("Read the T-Pot configuration", "Set the HIVE address"):
+            self.assertIn("tpot_env", self.tasks[name]["tags"])
+        line = self.tasks["Set the HIVE address"]["ansible.builtin.lineinfile"]
+        self.assertIs(line["create"], False)
+        self.assertEqual(line["path"], "{{ tpot_env_file }}")
+
+    def test_play_regex_is_the_probe_regex(self):
+        line = self.tasks["Set the HIVE address"]["ansible.builtin.lineinfile"]
+        self.assertEqual(line["regexp"], sensor_probe.HIVE_IP.pattern)
+        # the form of the line comes from the same pattern as the line it replaces
+        self.assertIn(f"regex_findall('{sensor_probe.HIVE_IP.pattern}', multiline=True)", line["line"])
+        regexp = line["regexp"]
+        for text in ("TPOT_HIVE_IP=1", "TPOT_HIVE_IP =1", 'TPOT_HIVE_IP: "x"', "TPOT_HIVE_IP\t=1", "TPOT_HIVE_IP:1",
+                     "  TPOT_HIVE_IP=1", "export TPOT_HIVE_IP=1", "TPOT_HIVE_IP :1"):
+            self.assertTrue(re.search(regexp, text), text)
+        for text in ("#TPOT_HIVE_IP=", "TPOT_HIVE_IPS=", "XTPOT_HIVE_IP=", "TPOT_HIVE_IP", "exportTPOT_HIVE_IP=1",
+                     "# export TPOT_HIVE_IP=1"):
+            self.assertFalse(re.search(regexp, text), text)
+
+    def test_play_asserts_the_address(self):
+        check = self.tasks["Check the HIVE address"]
+        self.assertIn("always", check["tags"])
+        check = check["ansible.builtin.assert"]
+        self.assertIn("tpot sensors hive-address", check["fail_msg"])
+        that = " ".join(str(condition) for condition in check["that"])
+        self.assertIn("tpot_hive_address is defined", that)
+        self.assertIn("^[A-Za-z0-9][A-Za-z0-9.-]*$", that)
+        if not shutil.which("ansible-playbook"):
+            return
+        for tags in ((), ("--tags", "tpot_env")):
+            with self.subTest(tags), tempfile.TemporaryDirectory() as folder:
+                env_file = os.path.join(folder, "settings")
+                with open(env_file, "w", encoding="utf-8") as handle:
+                    handle.write("TPOT_HIVE_IP=192.0.2.1\n")
+                done = self.run_play(env_file, address="a/b", tags=tags)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn("tpot sensors hive-address", done.stdout + done.stderr)
+                with open(env_file, encoding="utf-8") as handle:
+                    self.assertEqual(handle.read(), "TPOT_HIVE_IP=192.0.2.1\n")
+
+    @unittest.skipUnless(shutil.which("ansible-playbook"), "needs ansible-playbook")
+    def test_play_syntax(self):
+        done = subprocess.run(["ansible-playbook", "--syntax-check", "-i", "localhost,", self.PLAY],
+                              capture_output=True, text=True, timeout=120)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+
+    @unittest.skipUnless(shutil.which("ansible-playbook"), "needs ansible-playbook")
+    def test_play_keeps_the_form_locally(self):
+        new = self.ADDRESS
+        cases = {
+            "equals": ("TPOT_TYPE=SENSOR\n#TPOT_HIVE_IP=old\nTPOT_HIVE_IP=192.0.2.1\nTPOT_HIVE_USER=x\n",
+                       f"TPOT_TYPE=SENSOR\n#TPOT_HIVE_IP=old\nTPOT_HIVE_IP={new}\nTPOT_HIVE_USER=x\n"),
+            "colon": ('TPOT_TYPE: "SENSOR"\nTPOT_HIVE_IP: "192.0.2.1"\n', f'TPOT_TYPE: "SENSOR"\nTPOT_HIVE_IP: "{new}"\n'),
+            "missing": ("TPOT_TYPE=SENSOR\n", f"TPOT_TYPE=SENSOR\nTPOT_HIVE_IP={new}\n"),
+            "last": ('TPOT_HIVE_IP=a\nTPOT_HIVE_IP: "b"\n', f'TPOT_HIVE_IP=a\nTPOT_HIVE_IP: "{new}"\n'),
+            # compose reads these too; the line keeps its = or :, not its indent, export or comment
+            "tight": ("TPOT_HIVE_IP:192.0.2.1\n", f'TPOT_HIVE_IP: "{new}"\n'),
+            "export": ('TPOT_HIVE_IP: "a"\nexport TPOT_HIVE_IP=192.0.2.1 # old\n', f'TPOT_HIVE_IP: "a"\nTPOT_HIVE_IP={new}\n'),
+            "indented": ("  TPOT_HIVE_IP = 192.0.2.1\nTPOT_HIVE_USER=x\n", f"TPOT_HIVE_IP={new}\nTPOT_HIVE_USER=x\n"),
+        }
+        for name, (before, after) in cases.items():
+            with self.subTest(name), tempfile.TemporaryDirectory() as home:
+                os.makedirs(os.path.join(home, "tpotce"))
+                env_file = os.path.join(home, "tpotce", ".env")
+                with open(env_file, "w", encoding="utf-8") as handle:
+                    handle.write(before)
+                os.chmod(env_file, 0o640)
+                done = self.run_play(env_file)
+                self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+                with open(env_file, encoding="utf-8") as handle:
+                    self.assertEqual(handle.read(), after)
+                self.assertEqual(stat.S_IMODE(os.stat(env_file).st_mode), 0o640)
+                self.assertEqual(sensor_probe.probe(home)["hive_ip"], new)
+
+
+class FakeClock:
+    """time of tpotctl.cli for the wait of tpot sensors hive-address: sleep() moves it on."""
+
+    def __init__(self, now=1000.0):
+        self.now, self.sleeps = now, []
+
+    def time(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+    def __getattr__(self, name):
+        import time
+        return getattr(time, name)
+
+
+def probe(**changes):
+    """What a 24.04.2 SENSOR with Fluent Bit says of itself (probe_sensor), its TPOT_HIVE_IP the old address."""
+    values = dict(version="24.04.2", os_id="debian", hold=False, update_locked=False, hive_ip="192.0.2.1",
+                  services=["tpotinit", "fluentbit", "cowrie"], role="SENSOR")
+    values.update(changes)
+    return sensors.Probe(**values)
+
+
+@unittest.skipUnless(textual, "Rich is not installed, run with the venv of tpot")
+class HiveAddressCliTest(unittest.TestCase):
+    """tpot sensors hive-address: one question after the checks of every sensor, then the play, the wait until
+    the HIVE hears of each sensor at its new address, and what each sensor has read back."""
+    NEW = "198.51.100.7"
+    OLD = "192.0.2.1"
+    run_cli = CliTest.run_cli               # the checkout of CliTest, not its tests
+
+    def setUp(self):
+        CliTest.setUp(self)
+        registry = sensors.Registry(self.repo)
+        for number in range(1, 6):
+            name = f"s{number}"
+            if name != "s4":                    # s4 has no access to this HIVE
+                registry.grant(name, "pw")
+            registry.record(sensors.Sensor(name, host=f"10.0.0.{number}", ssh_user="debian", hive_address=self.OLD,
+                                           source="deployed"))
+        patch = mock.patch("tpotctl.ops.require_linux_host")
+        self.linux = patch.start()
+        self.addCleanup(patch.stop)
+
+    def registry(self):
+        return sensors.Registry(self.repo)
+
+    def by_hand(self, names):
+        return (f"By hand for {names}: set TPOT_HIVE_IP={self.NEW} in ~/tpotce/.env on the sensor, copy "
+                f"{self.registry().cert} of this HIVE to ~/tpotce/data/hive.crt there, restart T-Pot (sudo systemctl "
+                f"restart tpot), then here for each: tpot sensors set NAME --hive-address {self.NEW}")
+
+    def hive(self, *args, ssh=None, probes=None, beats=None, info=None, renew="reloaded", missed=(), runs=(),
+             retry=None, code=0, stdin=None):
+        """tpot sensors hive-address ARGS with fakes at the edges: check_ssh by host (default ok), probe_sensor
+        per name (a list, before and after the play, default the old and then the new address), the answers of
+        fetch_heartbeats in turn (the last one stays; an exception is raised), nginx.crt `info` (default it
+        covers both addresses), renew_certificate returning `renew`, copy_certificate missing `missed`, the saved
+        fleet runs (an exception is raised) and ansible-playbook writing `retry` and waiting through `code` (an
+        exit code or the steps of Child)."""
+        from types import SimpleNamespace
+        seen = SimpleNamespace(ssh=[], probes=[], beats=0, events=[], children=[], folders=[], inventories=[],
+                               clock=FakeClock())
+        probes = dict(probes or {})
+        beats = list(beats or [({}, {})])
+        info = info or cert([f"IP:{self.OLD}", f"IP:{self.NEW}"])
+
+        def check_ssh(host, user, run=None, port=sensors.SSH_PORT):
+            seen.ssh.append(host)
+            return (ssh or {}).get(host, "ok")
+
+        def probe_sensor(sensor, run=None):
+            seen.probes.append(sensor.name)
+            answers = probes.setdefault(sensor.name, [probe(), probe(hive_ip=self.NEW)])
+            answer = answers.pop(0) if len(answers) > 1 else answers[0]
+            if isinstance(answer, BaseException):
+                raise answer
+            return answer
+
+        def fetch_heartbeats():
+            seen.beats += 1
+            answer = beats.pop(0) if len(beats) > 1 else beats[0]
+            if isinstance(answer, BaseException):
+                raise answer
+            return answer
+
+        def renew_certificate(registry, addresses, console, yes, reload, *, current):
+            seen.events.append(("renew", list(addresses), yes, reload, list(current)))
+            return renew
+
+        def copy_certificate(chosen, become_pass):
+            seen.events.append(("copy", [s.name for s in chosen]))
+            return [s for s in chosen if s.name in missed]
+
+        def list_runs(_store):
+            if isinstance(runs, BaseException):
+                raise runs
+            return list(runs)
+
+        def popen(command, **kwargs):
+            env = kwargs.get("env") or {}
+            folder = env.get("ANSIBLE_RETRY_FILES_SAVE_PATH")
+            seen.folders.append(folder)
+            inventory = command[command.index("-i") + 1]
+            with open(inventory, encoding="utf-8") as handle:
+                seen.inventories.append((inventory, handle.read()))
+            if folder and retry is not None:
+                with open(os.path.join(folder, "sensor_hive.retry"), "w", encoding="utf-8") as handle:
+                    handle.write("".join(f"{name}\n" for name in retry))
+            seen.events.append(("play", command))
+            seen.children.append(Child(command, kwargs, code if isinstance(code, list) else [code]))
+            return seen.children[-1]
+        with mock.patch.object(sensors, "check_ssh", side_effect=check_ssh), \
+                mock.patch.object(sensors, "probe_sensor", side_effect=probe_sensor), \
+                mock.patch.object(sensors, "fetch_heartbeats", side_effect=fetch_heartbeats), \
+                mock.patch.object(sensors, "cert_info", return_value=info), \
+                mock.patch("tpotctl.cli.renew_certificate", side_effect=renew_certificate), \
+                mock.patch("tpotctl.cli.copy_certificate", side_effect=copy_certificate), \
+                mock.patch("tpotctl.cli.HIVE_WAIT", 30, create=True), \
+                mock.patch("tpotctl.cli.HIVE_POLL", 10, create=True), \
+                mock.patch("tpotctl.cli.time", seen.clock), \
+                mock.patch("tpotctl.fleet.RunStore.list_runs", autospec=True, side_effect=list_runs), \
+                mock.patch("subprocess.Popen", side_effect=popen):
+            exit_code, text = self.run_cli("sensors", "hive-address", *args, stdin=stdin)
+        return exit_code, flat(text), seen
+
+    def addresses(self):
+        return {s.name: s.hive_address for s in self.registry().sensors()}
+
+    def test_invalid_address_exits_2_before_ssh(self):
+        before = self.addresses()
+        code, text, seen = self.hive("2001:db8::1", "-y")
+        self.assertEqual(code, 2, text)
+        self.assertIn("'2001:db8::1' is an IPv6 address", text)
+        self.assertEqual((seen.ssh, seen.beats, seen.events), ([], 0, []))
+        self.assertEqual(self.addresses(), before)
+
+    def test_ca_certificate_exits_2_before_any_change(self):
+        info = cert([f"IP:{self.OLD}"], self_signed=False)
+        code, text, seen = self.hive(self.NEW, "-y", info=info)
+        self.assertEqual(code, 2, text)
+        self.assertIn(flat(sensors.ca_renew_refusal(info, os.path.dirname(self.registry().cert))), text)
+        self.assertEqual((seen.ssh, seen.events), ([], []))
+
+    def test_es_unreachable_exits_1_before_any_change(self):
+        down = sensors.SensorsError("Sensor heartbeats on http://127.0.0.1:64298 cannot be asked (refused)")
+        code, text, seen = self.hive(self.NEW, "-y", beats=[down])
+        self.assertEqual(code, 1, text)
+        self.assertIn("cannot be asked (refused): start T-Pot on this HIVE first", text)
+        self.assertEqual((seen.ssh, seen.events), ([], []))
+
+    def test_fleet_state_unreadable_exits_1_before_any_change(self):
+        from tpotctl import fleet
+        broken = fleet.FleetError("The fleet state directory contains an invalid entry.")
+        code, text, seen = self.hive(self.NEW, "-y", runs=broken)
+        self.assertEqual(code, 1, text)
+        self.assertIn("The fleet state directory contains an invalid entry.", text)
+        self.assertEqual((seen.ssh, seen.events), ([], []))
+
+    def test_precheck_names_every_skip_and_no_changes_nothing(self):
+        before = self.addresses()
+        code, text, seen = self.hive(self.NEW, ssh={"10.0.0.2": "key"}, probes={"s3": [probe(os_id="ubuntu")]},
+                                     runs=[{"phase": "running", "targets": [{"name": "s5"}]}], stdin=TTY("n\n"))
+        self.assertEqual(code, 1, text)
+        self.assertEqual(seen.events, [])                           # no play, no certificate
+        self.assertEqual(self.addresses(), before)
+        self.assertEqual(seen.ssh, ["10.0.0.1", "10.0.0.2", "10.0.0.3"])     # not s4 (access), not s5 (fleet)
+        self.assertEqual(seen.probes, ["s1", "s3"])
+        self.assertIn(f"s1: TPOT_HIVE_IP {self.OLD} becomes {self.NEW}", text)
+        self.assertIn("s2: no key login on debian@10.0.0.2, run: ssh-copy-id -p 64295 debian@10.0.0.2", text)
+        self.assertIn("s3 runs on ubuntu: T-Pot supports only Debian", text)
+        self.assertIn("s4 is skipped, it has no access to this HIVE", text)
+        self.assertIn("s5 is in a saved fleet update, finish it first: tpot sensors update --resume, or drop it: "
+                      "tpot sensors update --discard", text)
+        for name in ("sensor-old-lynx", "sensor-old-otter"):
+            self.assertIn(f"{name} is skipped, add where it is: tpot sensors set {name} --host ... --ssh-user ...",
+                          text)
+        self.assertIn(f"Set {self.NEW} on 1 sensor(s) and restart T-Pot there?", text)
+
+    def test_no_targets_ends_with_1_without_a_question(self):
+        code, text, seen = self.hive(self.NEW, "s4", stdin=TTY())
+        self.assertEqual(code, 1, text)
+        self.assertIn("s4 is skipped, it has no access to this HIVE", text)
+        self.assertNotIn("[y/N]", text)
+        self.assertEqual(seen.events, [])
+
+    def test_no_question_without_terminal_exits_2(self):
+        code, text, seen = self.hive(self.NEW, "s1")
+        self.assertEqual(code, 2, text)
+        self.assertIn("Add --yes to do it without a terminal.", text)
+        self.assertEqual(seen.events, [])
+
+    def test_heartbeat_confirms_and_updates_the_registry(self):
+        beats = [({"s1": sensors.Heartbeat(received_at=900.0, started_at="A")}, {}),
+                 ({"s1": sensors.Heartbeat(received_at=1005.0, started_at="B")}, {})]
+        code, text, seen = self.hive(self.NEW, "s1", "-y", beats=beats)
+        self.assertEqual(code, 0, text)
+        self.assertEqual(self.registry().get("s1").hive_address, self.NEW)
+        self.assertEqual(self.registry().get("s2").hive_address, self.OLD)
+        self.assertIn(f"s1 sends to {self.NEW}.", text)
+        self.assertIn(f"Back to the old address: tpot sensors hive-address {self.OLD} s1", text)
+        self.assertNotIn("By hand", text)
+        command = seen.children[0].args
+        self.assertEqual(command[:2], ["ansible-playbook", os.path.join(REPO_DIR, "installer", "install",
+                                                                         "sensor_hive.yml")])
+        self.assertIn(f"tpot_hive_address={self.NEW}", command)
+        self.assertIn("--ask-become-pass", command)
+        inventory, content = seen.inventories[0]
+        self.assertEqual(content.splitlines()[1:], ["s1 ansible_host=10.0.0.1 ansible_user=debian ansible_port=64295"])
+        self.assertFalse(os.path.exists(inventory))
+        self.assertFalse(os.path.exists(seen.folders[0]))
+        self.assertEqual(seen.clock.sleeps, [])                     # confirmed with the first answer
+
+    def test_no_become_pass_leaves_the_sudo_question_out(self):
+        beats = [({}, {}), ({"s1": sensors.Heartbeat(received_at=1005.0, started_at="B")}, {})]
+        code, text, seen = self.hive(self.NEW, "s1", "-y", "--no-become-pass", beats=beats)
+        self.assertEqual(code, 0, text)
+        self.assertNotIn("--ask-become-pass", seen.children[0].args)
+
+    def test_buffered_heartbeat_does_not_confirm(self):
+        beats = [({"s1": sensors.Heartbeat(received_at=900.0, started_at="A")}, {}),
+                 ({"s1": sensors.Heartbeat(received_at=1005.0, started_at="A")}, {})]
+        code, text, seen = self.hive(self.NEW, "s1", "-y", beats=beats)
+        self.assertEqual(code, 1, text)
+        self.assertEqual(self.registry().get("s1").hive_address, self.NEW)     # the sensor has it
+        self.assertIn("s1 is not confirmed yet", text)
+        self.assertIn(self.by_hand("s1"), text)
+        self.assertEqual(seen.clock.sleeps, [10, 10, 10])          # HIVE_POLL up to HIVE_WAIT
+        self.assertEqual(seen.beats, 5)
+
+    def test_old_sensor_is_confirmed_by_refusal(self):
+        old = dict(version="24.04.1", services=["tpotinit", "logstash", "cowrie"])
+        beats = [({}, {"s1": 800.0}), ({}, {"s1": 1003.0})]
+        code, text, _seen = self.hive(self.NEW, "s1", "-y", beats=beats,
+                                      probes={"s1": [probe(**old), probe(hive_ip=self.NEW, **old)]})
+        self.assertEqual(code, 0, text)
+        self.assertIn("s1 reaches this HIVE, update needed: tpot sensors update s1", text)
+        self.assertEqual(self.registry().get("s1").hive_address, self.NEW)
+
+    def test_old_sensor_without_an_event_says_where_it_shows_up(self):
+        old = dict(version="24.04.1", services=["tpotinit", "logstash", "cowrie"])
+        code, text, _seen = self.hive(self.NEW, "s1", "-y",
+                                      probes={"s1": [probe(**old), probe(hive_ip=self.NEW, **old)]})
+        self.assertEqual(code, 1, text)
+        self.assertIn("s1 is not confirmed yet", text)
+        self.assertIn("update needed (events refused)", text)
+
+    def test_logstash_on_a_new_release_is_changed_not_awaited(self):
+        new = dict(services=["tpotinit", "logstash", "cowrie"])
+        code, text, seen = self.hive(self.NEW, "s1", "-y",
+                                     probes={"s1": [probe(**new), probe(hive_ip=self.NEW, **new)]})
+        self.assertEqual(code, 1, text)
+        self.assertEqual(seen.beats, 1)                             # only before: nothing to wait for
+        self.assertIn("~/tpotce/update.sh --adapt-compose", text)
+        self.assertEqual(self.registry().get("s1").hive_address, self.NEW)
+        self.assertNotIn("By hand", text)
+
+    def test_renew_keeps_the_sans_of_the_others_and_sends_them_the_certificate(self):
+        registry = self.registry()
+        registry.update("s2", hive_address="hive.example")
+        beats = [({}, {}), ({"s1": sensors.Heartbeat(received_at=1005.0, started_at="B")}, {})]
+        info = cert([f"IP:{self.OLD}"])
+        cert_by_hand = ("By hand for {}: copy " + registry.cert + " of this HIVE to ~/tpotce/data/hive.crt on the "
+                        "sensor, then restart T-Pot there (sudo systemctl restart tpot).")
+        code, text, seen = self.hive(self.NEW, "s1", "-y", beats=beats, info=info)
+        self.assertEqual(code, 0, text)
+        self.assertEqual([event[0] for event in seen.events], ["renew", "play", "copy"])
+        self.assertEqual(seen.events[0], ("renew", [self.OLD, "hive.example", self.NEW], True, True,
+                                          [f"IP:{self.OLD}"]))
+        self.assertEqual(seen.events[2], ("copy", ["s2", "s3", "s5"]))         # s4 has no access
+        self.assertIn("Only the new certificate goes to: s2, s3, s5", text)
+        self.assertIn("s2, s3, s5 have the new certificate.", text)
+        self.assertIn(cert_by_hand.format("sensor-old-lynx, sensor-old-otter"), text)   # access, no host
+
+        code, text, seen = self.hive(self.NEW, "s1", "-y", beats=beats, info=info, missed=["s3"])
+        self.assertEqual(code, 1, text)
+        self.assertIn("s2, s5 have the new certificate.", text)
+        self.assertIn(cert_by_hand.format("s3, sensor-old-lynx, sensor-old-otter"), text)
+
+    def test_renew_leaves_the_certificate_out_where_an_update_or_a_migration_holds_the_sensor(self):
+        """sensor_cert.yml restarts Fluent Bit: that would start it where a fleet update, an update or a
+        migration keeps T-Pot stopped."""
+        beats = [({}, {}), ({"s1": sensors.Heartbeat(received_at=1005.0, started_at="B")}, {})]
+        info = cert([f"IP:{self.OLD}"])
+        later = "{} gets the new certificate once the update or migration there is done: tpot sensors cert --distribute {}"
+        fleet_run = [{"phase": "running", "targets": [{"name": "s2"}]}]
+        for s5, receivers in ((probe(), ["s5"]), (probe(hold=True), None)):
+            with self.subTest(s5_hold=s5.hold):
+                code, text, seen = self.hive(self.NEW, "s1", "s3", "-y", beats=beats, info=info, runs=fleet_run,
+                                             probes={"s3": [probe(update_locked=True)], "s5": [s5]})
+                self.assertEqual(code, 0, text)
+                copies = [event[1] for event in seen.events if event[0] == "copy"]
+                self.assertEqual(copies, [receivers] if receivers else [])
+                self.assertNotIn("s2", seen.probes)                     # a fleet run says it without SSH
+                for name in ("s2", "s3") if receivers else ("s2", "s3", "s5"):
+                    self.assertIn(later.format(name, name), text)
+                if receivers:
+                    self.assertNotIn(later.format("s5", "s5"), text)
+
+    def test_renew_names_a_sensor_it_cannot_ask_for_the_certificate_by_hand(self):
+        beats = [({}, {}), ({"s1": sensors.Heartbeat(received_at=1005.0, started_at="B")}, {})]
+        down = sensors.SensorsError("s5 cannot be asked: ssh timed out")
+        code, text, seen = self.hive(self.NEW, "s1", "-y", beats=beats, info=cert([f"IP:{self.OLD}"]),
+                                     probes={"s5": [down]})
+        self.assertEqual(code, 1, text)
+        copies = [event[1] for event in seen.events if event[0] == "copy"]
+        self.assertEqual(copies, [["s2", "s3"]])
+        self.assertIn("s5 cannot be asked: ssh timed out", text)
+        self.assertRegex(" ".join(text.split()), r"By hand for [^:]*s5")
+
+    def test_failed_nginx_reload_touches_no_sensor(self):
+        code, text, seen = self.hive(self.NEW, "s1", "-y", info=cert([f"IP:{self.OLD}"]), renew="")
+        self.assertEqual(code, 1, text)
+        self.assertEqual([event[0] for event in seen.events], ["renew"])
+        self.assertEqual(seen.children, [])
+        self.assertEqual(self.registry().get("s1").hive_address, self.OLD)
+
+    def test_playbook_failure_keeps_the_registry_where_the_sensor_kept_its_address(self):
+        code, text, seen = self.hive(self.NEW, "s1", "s2", "-y", code=2, retry=["s1", "s2"],
+                                     probes={"s2": [probe(), probe()]})
+        self.assertEqual(code, 1, text)
+        self.assertEqual(self.registry().get("s1").hive_address, self.NEW)
+        self.assertEqual(self.registry().get("s2").hive_address, self.OLD)
+        self.assertIn(f"s1 has TPOT_HIVE_IP={self.NEW}, but the play stopped there: T-Pot takes it from its next "
+                      f"start (sudo systemctl restart tpot)", text)
+        self.assertIn(f"s2 keeps TPOT_HIVE_IP={self.OLD}", text)
+        self.assertIn(self.by_hand("s2"), text)
+        self.assertNotIn("By hand for s1", text)
+        self.assertEqual(seen.beats, 1)                             # nothing to wait for
+        self.assertFalse(os.path.exists(seen.folders[0]))
+
+    def test_failed_play_after_a_renew_names_the_certificate_where_the_address_was_there_before(self):
+        """The play copies hive.crt before it changes .env: a line it changed means the sensor has the new
+        certificate, a line that was there before says nothing of it."""
+        code, text, _seen = self.hive(self.NEW, "s1", "s2", "-y", code=2, retry=["s1", "s2"],
+                                      info=cert([f"IP:{self.OLD}"]),
+                                      probes={"s1": [probe(hive_ip=self.NEW)], "s2": [probe(), probe(hive_ip=self.NEW)]})
+        self.assertEqual(code, 1, text)
+        self.assertIn(f"s1 had TPOT_HIVE_IP={self.NEW} already, but the play stopped there, maybe before it got "
+                      f"the new certificate", text)
+        self.assertIn(f"s2 has TPOT_HIVE_IP={self.NEW}, but the play stopped there: T-Pot takes it from its next "
+                      f"start (sudo systemctl restart tpot)", text)
+        self.assertIn(self.by_hand("s1"), text)
+        self.assertNotIn("By hand for s1, s2", text)
+        self.assertEqual(self.registry().get("s1").hive_address, self.NEW)
+
+    def test_unreadable_sensor_after_the_play_keeps_its_entry(self):
+        gone = sensors.SensorsError("s1 cannot be checked (no answer within 15 s)")
+        code, text, _seen = self.hive(self.NEW, "s1", "-y", code=2, retry=["s1"], probes={"s1": [probe(), gone]})
+        self.assertEqual(code, 1, text)
+        self.assertEqual(self.registry().get("s1").hive_address, self.OLD)
+        self.assertIn("s1 cannot be checked (no answer within 15 s)", text)
+        self.assertIn(self.by_hand("s1"), text)
+
+    def test_ctrl_c_during_wait_still_reads_back_and_exits_130(self):
+        code, text, seen = self.hive(self.NEW, "s1", "-y", beats=[({}, {}), KeyboardInterrupt()], stdin=TTY())
+        self.assertEqual(code, 130, text)
+        self.assertNotIn("Traceback", text)
+        self.assertEqual(seen.probes, ["s1", "s1"])                 # read back all the same
+        self.assertEqual(self.registry().get("s1").hive_address, self.NEW)
+        self.assertFalse(os.path.exists(seen.inventories[0][0]))
+        self.assertFalse(os.path.exists(seen.folders[0]))
+
+    def test_ctrl_c_during_the_play_reads_back_and_exits_130(self):
+        code, text, seen = self.hive(self.NEW, "s1", "-y", code=[KeyboardInterrupt, -2], stdin=TTY(),
+                                     probes={"s1": [probe(), probe()]})
+        self.assertEqual(code, 130, text)
+        self.assertEqual(seen.probes, ["s1", "s1"])
+        self.assertEqual(seen.beats, 1)                             # no wait after a cancelled play
+        self.assertIn(f"s1 keeps TPOT_HIVE_IP={self.OLD}", text)
+        self.assertEqual(self.registry().get("s1").hive_address, self.OLD)
+
+    def test_set_help_points_to_hive_address(self):
+        code, text = self.run_cli("sensors", "set", "-h")
+        self.assertEqual(code, 0, text)
+        self.assertIn("only the registry, the sensor keeps its address: tpot sensors hive-address changes it there",
+                      flat(text))

@@ -853,9 +853,7 @@ services:
         condition: service_healthy
     environment:
      - LS_JAVA_OPTS=-Xms1024m -Xmx1024m
-     - TPOT_TYPE=${TPOT_TYPE:-HIVE}
-    ports:
-     - "127.0.0.1:64305:64305"
+     - TPOT_TYPE=${TPOT_TYPE:-MOBILE}
     mem_limit: 2g
     image: ${TPOT_REPO}/logstash:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}

@@ -247,5 +247,46 @@ class PlaybooksTest(unittest.TestCase):
         self.assertIn("path: /usr/local/sbin/tpot-auto-updates", play)
 
 
+class DailyRebootTest(unittest.TestCase):
+    """The job of the playbook, run with its absolute paths in a temporary folder and stub commands."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = os.path.realpath(tmp.name)
+        self.bin = os.path.join(self.root, "bin")
+        os.makedirs(self.bin)
+        self.calls = os.path.join(self.root, "calls")
+        for name in ("systemctl", "docker", "shutdown"):
+            path = os.path.join(self.bin, name)
+            with open(path, "w", encoding="utf-8") as out:
+                out.write(f'#!/bin/sh\necho "{name} $*" >> "$CALLS"\n')
+            os.chmod(path, 0o755)
+
+    def run_job(self):
+        job = playbook_job("").replace("/etc/systemd/system/", self.root + "/etc/systemd/system/") \
+            .replace("/usr/sbin/shutdown", os.path.join(self.bin, "shutdown"))
+        result = subprocess.run(["sh", "-c", job], capture_output=True, text=True, timeout=30,
+                                env={"PATH": f"{self.bin}:/usr/bin:/bin", "CALLS": self.calls})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        if not os.path.exists(self.calls):
+            return []
+        with open(self.calls, encoding="utf-8") as handle:
+            calls = handle.read().splitlines()
+        os.unlink(self.calls)
+        return calls
+
+    def test_a_migration_guard_keeps_the_nightly_reboot_from_cutting_off_an_export_or_restore(self):
+        from tpotctl import migration_runtime as runtime
+
+        run_id = "c" * 32
+        self.assertTrue(runtime.systemd_guard(self.root, "tpot.service", run_id, os.getuid(), "hold"))
+        self.assertEqual(self.run_job(), [])
+        self.assertFalse(runtime.systemd_guard(self.root, "tpot.service", run_id, os.getuid(), "release"))
+        calls = self.run_job()
+        self.assertEqual(calls[0], "systemctl stop tpot.service")
+        self.assertTrue(calls[-1].startswith("shutdown -r +1"), calls)
+
+
 if __name__ == "__main__":
     unittest.main()

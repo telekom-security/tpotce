@@ -847,6 +847,58 @@ class AdoptTest(unittest.TestCase):
 
 class CliTest(unittest.TestCase):
 
+    def test_check_install_rejects_incompatible_mobile_before_copy(self):
+        import customizer
+        from pathlib import Path
+        mobile = Path(core.COMPOSE_DIR, "mobile.yml").read_text()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, "input.yml")
+            path.write_text(mobile)
+            check = ["--check-install", str(path), "--tpot-type"]
+            self.assertEqual(customizer.main(check + ["MOBILE"]), 0)
+            self.assertNotEqual(customizer.main(check + ["HIVE"]), 0)
+            for text in (mobile.replace("  logstash:", "  other:"),
+                         mobile.replace("\n  logstash:\n", "\n  logstash:\n    command: ['-f', 'sensors.conf']\n"),
+                         mobile.replace("TPOT_TYPE=${TPOT_TYPE:-MOBILE}", "TPOT_TYPE=HIVE"),
+                         mobile + "\n  nginx: {}\n"):
+                path.write_text(text)
+                self.assertNotEqual(customizer.main(check + ["MOBILE"]), 0)
+
+    def test_mobile_create_adopt_rebuild_and_conflicts(self):
+        import customizer
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(core, "env_value", return_value="HIVE"), \
+                mock.patch.object(core.shutil, "which", return_value=None):
+            out = Path(tmp, "custom.yml")
+            with mock.patch.object(customizer.say, "hint") as hint:
+                self.assertEqual(customizer.main(["--base", "mobile", "--port", "cowrie:22=2222", "-o", str(out)]), 0)
+                self.assertIn("-t m", " ".join(hint.call_args.args))
+            text = out.read_text()
+            self.assertEqual(core.adopt_type(text, "HIVE"), "MOBILE")
+            self.assertEqual(core.adopt_type("", "MOBILE"), "MOBILE")
+            self.assertTrue(core.Catalog().required("MOBILE", "logstash"))
+            self.assertEqual(customizer.main(["--rebuild", str(out)]), 0)
+            self.assertEqual(out.read_text(), text)
+            self.assertIn("2222:22", text)
+            self.assertNotIn("64305:64305", text)
+            self.assertEqual(customizer.main(["--adopt", str(out), "--tpot-type", "MOBILE", "-o", str(out)]), 0)
+            self.assertEqual(core.parse_header(out.read_text()).base, "MOBILE")
+            for service in ("nginx", "kibana", "map_web", "fluentbit"):
+                before = out.read_bytes()
+                self.assertNotEqual(customizer.main(["--base", "mobile", "--add", service, "-o", str(out)]), 0)
+                self.assertEqual(out.read_bytes(), before)
+            # A hand edit can introduce a forbidden receiver without touching the selection header.
+            edited = text + "\n  nginx: {}\n"
+            out.write_text(edited)
+            self.assertNotEqual(customizer.main(["--rebuild", str(out)]), 0)
+            self.assertEqual(out.read_text(), edited)
+            for extra in ("  nginx: {}\n", "  logstash:\n    ports: ['127.0.0.1:6550:64306']\n"):
+                conflict = Path(tmp, "conflict.yml")
+                conflict.write_text("# T-Pot: MOBILE\nservices:\n" + extra)
+                before = out.read_bytes()
+                self.assertNotEqual(customizer.main(["--adopt", str(conflict), "-o", str(out)]), 0)
+                self.assertEqual(out.read_bytes(), before)
+
     def run_cli(self, *args):
         proc = subprocess.run([sys.executable, CUSTOMIZER] + list(args), stdin=subprocess.DEVNULL,
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,

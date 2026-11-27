@@ -9,6 +9,7 @@ Adopt:         python3 customizer.py --adopt ~/tpotce/docker-compose.yml -o new.
 
 import argparse
 import os
+import shlex
 import sys
 
 
@@ -85,9 +86,9 @@ def parse_args(argv):
     parser.add_argument("--adopt", metavar="FILE",
                         help="turn any compose file (an earlier customizer's, one of your own) into a selection "
                              "of this release and write it; names what it drops and what it leaves out")
-    parser.add_argument("--tpot-type", choices=["HIVE", "SENSOR"], type=str.upper,
-                        help="with --adopt: the edition to start from, STANDARD for HIVE, SENSOR for SENSOR "
-                             "(default: TPOT_TYPE of ~/tpotce/.env)")
+    parser.add_argument("--check-install", metavar="FILE", help="validate a custom file for --tpot-type without writing")
+    parser.add_argument("--tpot-type", choices=["HIVE", "SENSOR", "MOBILE"], type=str.upper,
+                        help="role for custom installation or adoption (STANDARD is the HIVE base)")
     parser.add_argument("--old-catalog", metavar="FILE",
                         help="with --adopt: the tpot_services.yml the file was built from; a host port that "
                              "differs from it is yours and carried, without it no host port is carried")
@@ -196,9 +197,13 @@ def adopt(catalog, args):
     return 0
 
 
-def next_steps(path):
+def next_steps(path, role):
     name = os.path.basename(path)
     say.ok(f"{path} is written.")
+    if role == "MOBILE":
+        say.info("Use TPOT_TYPE=MOBILE with this file. For a new custom installation on Debian:")
+        say.hint(f"./install.sh -s -t m -c {shlex.quote(path)}")
+        return
     if os.path.abspath(path) == os.path.join(core.REPO_DIR, "docker-compose.yml"):
         return
     say.info("To use it:")
@@ -215,6 +220,14 @@ def main(argv=None):
         say.ok(f"PyYAML is available to the customizer ({where}).")
         return 0
     try:
+        if args.check_install:
+            with open(args.check_install, encoding="utf-8") as handle:
+                text = handle.read()
+            if core.adopt_type(text) == "MOBILE" and args.tpot_type != "MOBILE":
+                raise core.CustomizerError("a MOBILE base needs install.sh -t m")
+            if args.tpot_type == "MOBILE":
+                core.mobile_services(text, installing=True)
+            return 0
         catalog = core.Catalog()
         if args.adopt:
             return adopt(catalog, args)
@@ -225,6 +238,8 @@ def main(argv=None):
             if selection is None:
                 say.error(f"{args.rebuild} was not built by this customizer.")
                 return 2
+            if selection.base == "MOBILE":
+                core.mobile_services(text)
             selection, swapped = core.swap_shipper(selection, text)
             result = core.resolve(catalog, selection, args.max_networks, strict=False)
             report(swapped + result.findings)
@@ -261,7 +276,7 @@ def main(argv=None):
             if result.errors:
                 return 1
         write(catalog, result, output)
-        next_steps(output)
+        next_steps(output, result.role())
         return 0
     except core.CustomizerError as err:
         say.error(f"{err}")

@@ -65,6 +65,12 @@ class Backend:
     def backups(self) -> List[str]:
         return ops.backups()
 
+    def update_platform(self) -> ops.UpdatePlatform:
+        return ops.update_platform(installed_dir=ops.installation())
+
+    def migration_hold(self) -> str:
+        return ops.migration_hold(ops.installation())
+
     def backup_infos(self):
         return [ops.backup_info(path) for path in ops.backups()]
 
@@ -1722,6 +1728,7 @@ class SensorsPane(Vertical):
             yield Button("Take over", id="sensor-import")
         with Horizontal(classes="actions"):
             yield Button("Sudo mode...", id="sensor-sudo", disabled=True)
+            yield Button("HIVE address...", id="sensor-hive-address", disabled=True)
             yield Button("Update sensors...", id="sensor-update", variant="primary", disabled=True)
 
     def on_mount(self) -> None:
@@ -1811,6 +1818,7 @@ class SensorsPane(Vertical):
         # Each button gets its final value once: disabling a focused button, even for a moment, takes its focus.
         if registry is None:
             self.query_one("#sensor-sudo", Button).disabled = True
+            self.query_one("#sensor-hive-address", Button).disabled = True
             self.query_one("#sensor-update", Button).disabled = True
             table.sync_rows([])
             info.append(problem, style=theme.color("error"))
@@ -1821,6 +1829,8 @@ class SensorsPane(Vertical):
         observed = list(tsensors.observations(registry, status, self.found))
         table.sync_rows(tsensors.table_rows(observed))
         self.query_one("#sensor-sudo", Button).disabled = not table.row_count
+        # a sensor of lswebpasswd alone is not registered: tpot sensors hive-address has nothing to change
+        self.query_one("#sensor-hive-address", Button).disabled = not registry.sensors()
         self.query_one("#sensor-update", Button).disabled = not any(
             sensor.access for sensor in registry.sensors())
         for pane in self.app.query(StatusPane):
@@ -1901,6 +1911,14 @@ class SensorsPane(Vertical):
                     self.load()
 
             self.app.push_screen(FleetUpdateScreen(None, registry), finished)
+        elif button == "sensor-hive-address" and self.registry is not None:
+            from tpotctl.screens.dialogs import HiveAddressDialog
+            registry = self.registry
+            host = next((s.host for s in registry.sensors() if s.host), "")
+            # the address this HIVE reaches a sensor from, looked up when the dialog opens
+            propose = (lambda: tsensors.default_hive_address(host)) if host else None
+            self.app.push_screen(HiveAddressDialog(registry.hive_addresses(), propose, tsensors.check_hive_address),
+                                 self.change_hive_address)
         elif button == "sensor-import" and self.found and self.registry is not None:
             names, registry = [entry.name for entry in self.found], self.registry
             self.app.push_screen(ConfirmDialog(f"{take_over_label(len(names), 'sensor')}?",
@@ -1943,6 +1961,15 @@ class SensorsPane(Vertical):
         self.app.runner(command, cwd=REPO_DIR)
         self.load()
         self.app.config_maybe_changed()         # LS_WEB_USER
+
+    def change_hive_address(self, result) -> None:
+        if not result:
+            return
+        command = [LAUNCHER, "sensors", "hive-address", result["address"]]
+        if result["nopass"]:
+            command.append("--no-become-pass")
+        self.app.runner(command, cwd=REPO_DIR)
+        self.load()
 
     def take_over(self, registry, names) -> None:
         from tpotctl.sensors import SensorsError
@@ -3323,6 +3350,23 @@ def doomed_text(doomed, closing: str = "") -> Text:
     return text
 
 
+MIGRATION_PACKAGE = "~/tpot-migration.tar"
+HISTORY_PACKAGE = "~/tpot-history.tar"
+# the way to a supported host (README: Migrating to a Supported Debian Host)
+MIGRATION_WAY = (f"The way to a supported host: Export for a migration ({MIGRATION_PACKAGE}, with the Elasticsearch "
+                 f"history {HISTORY_PACKAGE}), install Debian 13 on a new host (Raspberry Pi OS Lite 64-bit / Trixie "
+                 "for T-Pot Mobile), clone T-Pot there and run 'tpot migrate import FILE', then "
+                 "'./install.sh --migration'.")
+
+
+def history_export_text() -> Text:
+    return Text(f"The export with the history stops T-Pot and keeps it stopped, also after a reboot, while it "
+                f"writes a snapshot of Elasticsearch and the Kibana objects into {HISTORY_PACKAGE}. It stays "
+                "stopped afterwards: import the package on the new host, or press Resume the source here to start "
+                "this T-Pot again (then export anew). The daily reboot of T-Pot 24.04.1 (00:00 to 04:59) does not "
+                "know the start guard: export outside that time.", style=theme.color("mist"))
+
+
 class UpdatePane(Vertical):
 
     def compose(self) -> ComposeResult:
@@ -3335,6 +3379,9 @@ class UpdatePane(Vertical):
         with Horizontal(classes="actions"):
             yield Checkbox("Full backup with data/ (for a newer Elastic Stack)", False, id="update-full")
             yield Button("Rebuild the Manager's packages", id="run-setup")
+        with Horizontal(classes="actions"):
+            yield Button("Export for a migration ...", id="run-export")
+            yield Button("Resume the source", id="run-resume")
         yield NavDataTable(id="backups", cursor_type="row")
 
     def on_mount(self) -> None:
@@ -3342,10 +3389,26 @@ class UpdatePane(Vertical):
         self.show()
 
     def show(self) -> None:
+        from tpotctl import sensor_probe
         info = Text()
         info.append("update.sh stops T-Pot, writes a backup, pulls the release of your branch and puts your "
                     "edition and settings back. restore.sh brings a backup back.", style=theme.color("mist"))
+        # what update.sh would refuse, said before it runs (the app checks again on every Update)
+        hold = self.app.backend.migration_hold()
+        found = self.app.backend.update_platform()
+        if hold:
+            info.append("\n\n" + ops.MIGRATION_HELD.format(guard=sensor_probe.HOLD), style=theme.color("warn"))
+            for hint in ops.MIGRATION_HINTS + (ops.MIGRATION_BACKUP_HINT,):
+                info.append(f"\n{hint}", style=theme.color("mist"))
+        if found.refusal:
+            info.append(f"\n\n{found.refusal}", style=theme.color("error"))
+            info.append(f"\n{ops.UPDATE_BACKUP_HINT}", style=theme.color("mist"))
+            info.append(f"\n{MIGRATION_WAY}", style=theme.color("glass"))
+        if found.transition:
+            info.append(f"\n\n{found.transition}", style=theme.color("warn"))
         self.query_one("#update-info", Static).update(info)
+        self.query_one("#run-resume", Button).display = hold == "source"
+        self.app.update_buttons()
         table = self.query_one(DataTable)
         table.clear()
         for path in self.app.backend.backups():
@@ -3363,6 +3426,10 @@ class UpdatePane(Vertical):
             self.app.run_update(["-y", "-s"] + full)
         elif event.button.id == "run-restore":
             self.app.run_restore()
+        elif event.button.id == "run-export":
+            self.app.run_export()
+        elif event.button.id == "run-resume":
+            self.app.run_resume()
         elif event.button.id == "run-setup":
             from tpotctl.screens.task import Task
             self.app.run_task(Task("Rebuild the Python packages of the T-Pot Manager", [LAUNCHER, "setup", "--force"],
@@ -3421,7 +3488,7 @@ PANES = [
     ("update", "Update & backup", UpdatePane, "host"),
 ]
 PANES.sort(key=lambda pane: menu.PAGE_ORDER.index(pane[0]))
-NOT_HERE = "needs a T-Pot host: Linux with systemd (Debian recommended, not WSL2). Here the T-Pot Manager prepares a configuration."
+NOT_HERE = "needs a T-Pot host: Debian 13 (Raspberry Pi OS for T-Pot Mobile), not WSL2. Here the T-Pot Manager prepares a configuration."
 ON_A_SENSOR = {"users": "a SENSOR has no web UI, its events go to its HIVE.",
                "sensors": "sensors are managed on their HIVE, this is a SENSOR.",
                "elastic": "a SENSOR has no Elasticsearch, its events go to its HIVE."}
@@ -3848,15 +3915,93 @@ class TpotApp(App):
         ask on, so the question is asked here first. One check at a time, the Update buttons wait for it."""
         if self.update_checking:
             return
+        block = self.update_block()
+        if block:
+            # the page may be older than the host (the palette, a migration started since): update.sh would
+            # refuse it, the check for a loss of data is not even asked
+            self.notify(block, title="Update", severity="error", timeout=10)
+            for pane in self.query(UpdatePane):
+                pane.show()
+            return
         self.update_checking = True
         self.update_buttons()
         # the check fetches and asks the registry, it may take a while
         self.notify("Checking for a loss of data …", title="Update", timeout=6)
         self.run_worker(self.checked_update(args), group="update-check")
 
+    def update_block(self) -> str:
+        """What update.sh refuses on this host right now, "" when it would update: a migration that holds T-Pot
+        stopped first (update.sh asks in this order), then the platform."""
+        from tpotctl import sensor_probe
+        if self.backend.migration_hold():
+            return ops.MIGRATION_HELD.format(guard=sensor_probe.HOLD)
+        return self.backend.update_platform().refusal
+
     def update_buttons(self) -> None:
-        for button in self.query("#run-update, #run-update-start"):
-            button.disabled = self.update_checking
+        buttons = list(self.query("#run-update, #run-update-start"))
+        if not buttons:
+            return
+        disabled = self.update_checking or bool(self.update_block())
+        for button in buttons:
+            button.disabled = disabled
+
+    def run_export(self) -> None:
+        """tpot migrate export of the installed T-Pot in the task screen: the configuration (it keeps running) or,
+        on a HIVE after a question, the complete Elasticsearch history (it stops T-Pot and keeps it stopped)."""
+        from tpotctl.screens.dialogs import ChoiceDialog
+        if self.backend.tpot_type() == "SENSOR":
+            # a SENSOR has no Elasticsearch: its history is exported on its HIVE
+            self.start_export(False)
+            return
+
+        def chosen(index) -> None:
+            if index == 0:
+                self.start_export(False)
+            elif index == 1:
+                self.push_screen(ConfirmDialog("Stop T-Pot for the history export?", history_export_text(),
+                                               yes="Stop and export", no="Back"),
+                                 lambda yes: self.start_export(True) if yes else None)
+
+        self.push_screen(ChoiceDialog("Export for a migration",
+                                      [f"Configuration and identity ({MIGRATION_PACKAGE}, T-Pot keeps running)",
+                                       f"With the complete Elasticsearch history ({HISTORY_PACKAGE}, stops T-Pot)"]),
+                         chosen)
+
+    def start_export(self, history: bool) -> None:
+        from tpotctl.screens.task import Task
+        package = HISTORY_PACKAGE if history else MIGRATION_PACKAGE
+        command = [LAUNCHER, "migrate", "export", "--source", ops.installation(),
+                   "--output", os.path.expanduser(package)]
+        intro = Text(f"tpot migrate export writes the configuration and identity of this T-Pot into {package}",
+                     style=theme.color("glass"))
+        if history:
+            command += ["--history", "-y"]
+            intro.append(", with a snapshot of the Elasticsearch history and the Kibana objects. T-Pot is "
+                         "stopped for it and stays stopped.", style=theme.color("glass"))
+        else:
+            intro.append(", T-Pot keeps running.", style=theme.color("glass"))
+        intro.append(f"\nAn existing {package} is never overwritten: move it away first. The package holds "
+                     "secrets (.env, password hashes, TLS keys), copy it over a trusted channel only.",
+                     style=theme.color("mist"))
+        self.run_task(Task("Export for a migration", command, become="-B" if history else "", intro=intro,
+                           done=f"The package is {package}: import it on the new Debian 13 host."),
+                      lambda _code: self.query_one("#update", UpdatePane).show())
+
+    def run_resume(self) -> None:
+        """tpot migrate resume-source in the task screen, after a question: T-Pot of the source starts again."""
+        from tpotctl.screens.task import Task
+        body = Text("tpot migrate resume-source removes the start guard of the history export and starts this "
+                    "T-Pot again. Its events go on from here: a package exported before no longer holds all of "
+                    "them, export anew for a migration.", style=theme.color("mist"))
+
+        def confirmed(yes: bool) -> None:
+            if yes:
+                self.run_task(Task("Resume the source", [LAUNCHER, "migrate", "resume-source", "--source",
+                                                         ops.installation(), "-y"], become="-B",
+                                   done="T-Pot runs again; export anew for a migration."),
+                              lambda _code: self.query_one("#update", UpdatePane).show())
+
+        self.push_screen(ConfirmDialog("Start the source T-Pot again?", body, yes="Resume", no="Back"), confirmed)
 
     async def checked_update(self, args: List[str]) -> None:
         import asyncio
@@ -4118,7 +4263,8 @@ class TpotApp(App):
                 ["--web-user", secrets[0]] if secrets else []),
                 become="--become-file" if host else "",
                 secrets={"--password-file": secrets[1]} if secrets else {}, autostart=True,
-                done=f"T-Pot runs the {plan.target.title} edition." if host else
+                done="Sensor prepared; pair it from the HIVE." if plan.wait_for_pairing else
+                f"T-Pot runs the {plan.target.title} edition." if host else
                 f"docker-compose.yml is the {plan.target.title} edition.", restart_tpot=plan.target.role != "HIVE"
                 or bool(plan.env_changes))
             self.run_task(task, lambda _code: self.after_switch())

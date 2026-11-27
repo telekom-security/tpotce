@@ -765,6 +765,7 @@ function fuSENSOR_SHIPPER () {
 
 function fuDO_CONFIG () {
 	local myFILE="" myOLD="" myNEW="" myWAS="" myENV_OK="" myCOMPOSE_OK=1 myCOMPOSE_RESTORED=""
+	local myCOMPOSE_SOURCE="" myACTIVE=""
 	[ -z "${myDO_CONFIG}" ] && return
 	fuMARK phase config Restoring the configuration
 	echo
@@ -772,7 +773,33 @@ function fuDO_CONFIG () {
 	# no key (or an empty one): T-Pot left the policy as it was, which may delete at an age of its own;
 	# any days of the archive count as shorter, the hint says they wait
 	myOLD=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_ES_RETENTION)
-	if tar xf "${myARCHIVE}" -C "${myTMPDIR}" env 2>/dev/null && cp "${myTMPDIR}/env" "${myTPOTDIR}/.env";
+	# Rollback restores the archived role and image tags, including HIVE on a
+	# legacy Mobile. Only update/migration translates them to the new release.
+	if ! tar xf "${myARCHIVE}" -C "${myTMPDIR}" env 2>/dev/null; then
+	    fuUI_ERROR "Could not restore .env. The archive's copy cannot be read."
+	    fuFAILED config
+	    return 1
+	fi
+	if fuHAS "^docker-compose.yml$"; then
+	    myCOMPOSE_SOURCE="${myTMPDIR}/docker-compose.yml"
+	    if ! tar xf "${myARCHIVE}" -C "${myTMPDIR}" docker-compose.yml 2>/dev/null; then
+	        fuUI_ERROR "Could not restore docker-compose.yml. The archive's copy cannot be read, .env stays as it was."
+	        fuFAILED config
+	        return 1
+	    fi
+	elif [ "$(fuENV_VALUE "${myTMPDIR}/env" TPOT_TYPE)" = MOBILE ]; then
+	    myACTIVE=$(fuENV_VALUE "${myTMPDIR}/env" TPOT_DOCKER_COMPOSE)
+	    case "${myACTIVE}" in ""|docker-compose.yml|./docker-compose.yml|"${myTPOTDIR}/docker-compose.yml")
+	        myCOMPOSE_SOURCE="${myTPOTDIR}/compose/mobile.yml"
+	        if [ ! -r "${myCOMPOSE_SOURCE}" ]; then
+	            fuUI_ERROR "Missing Mobile template; configuration not restored."
+	            fuFAILED config
+	            return 1
+	        fi ;;
+	    esac
+	fi
+	# in place: a .env that cannot be written fails the group instead of being replaced
+	if cp "${myTMPDIR}/env" "${myTPOTDIR}/.env" && chmod 600 "${myTPOTDIR}/.env";
 	  then
 	    fuUI_OK "Wrote ${myTPOTDIR}/.env."
 	    myENV_OK=1
@@ -787,11 +814,11 @@ function fuDO_CONFIG () {
 	  else
 	    fuUI_ERROR "Could not restore .env."
 	    fuFAILED config
+	    return 1
 	fi
-	if fuHAS "^docker-compose.yml$";
+	if [ -n "${myCOMPOSE_SOURCE}" ];
 	  then
-	    if tar xf "${myARCHIVE}" -C "${myTMPDIR}" docker-compose.yml 2>/dev/null \
-	       && cp "${myTMPDIR}/docker-compose.yml" "${myTPOTDIR}/docker-compose.yml";
+	    if cp "${myCOMPOSE_SOURCE}" "${myTPOTDIR}/docker-compose.yml";
 	      then
 	        fuUI_OK "Wrote ${myTPOTDIR}/docker-compose.yml ($(head -1 "${myTPOTDIR}/docker-compose.yml"))."
 	        myCOMPOSE_RESTORED=1
@@ -1357,7 +1384,7 @@ fuUI_LINUX_ONLY restore.sh
 # WSL2 is Linux to uname -s, but no T-Pot host (tpotinit stops there, its kernel names Microsoft)
 if [[ "$(uname -r 2>/dev/null)" =~ [Mm]icrosoft ]];
   then
-    fuUI_ERROR "T-Pot does not run on WSL2, restore the backup on a Linux host (Debian recommended)."
+    fuUI_ERROR "T-Pot does not run on WSL2, restore the backup on a Debian 13 (Raspberry Pi OS for T-Pot Mobile) host."
     exit 1
 fi
 

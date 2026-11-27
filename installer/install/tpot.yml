@@ -10,6 +10,49 @@
   become_method: sudo
 
   tasks:
+    - name: Check supported install platform before Python bootstrap (All)
+      raw: |
+        set -eu
+        if [ ! -r /etc/os-release ]; then
+          echo "Cannot read /etc/os-release; refusing to install on an unknown host."
+          exit 1
+        fi
+        . /etc/os-release
+        my_machine=$(uname -m 2>/dev/null || true)
+        my_bits=$(getconf LONG_BIT 2>/dev/null || true)
+        my_version="${VERSION_ID:-}"
+        my_major="${my_version%%.*}"
+        if [ "${ID:-}" != "debian" ] || [ "${NAME:-}" != "Debian GNU/Linux" ] || [ "${my_major}" != "13" ]; then
+          echo "T-Pot new installations require Debian GNU/Linux 13."
+          exit 1
+        fi
+        case "${my_machine}:${my_bits}" in
+          x86_64:64|amd64:64|aarch64:64|arm64:64) ;;
+          *)
+            echo "T-Pot needs a 64-bit x86-64 or arm64 system."
+            exit 1
+            ;;
+        esac
+        if [ -e /etc/rpi-issue ]; then
+          if [ ! -f /etc/rpi-issue ] || [ ! -r /etc/rpi-issue ] || [ ! -s /etc/rpi-issue ]; then
+            echo "/etc/rpi-issue exists but is unreadable or empty; refusing to install on an unverified host."
+            exit 1
+          fi
+          case "${my_machine}" in
+            aarch64|arm64) ;;
+            *)
+              echo "Raspberry Pi OS for T-Pot Mobile requires a 64-bit arm64 system."
+              exit 1
+              ;;
+          esac
+          if [ "{{ tpot_install_type | default('') }}" != "m" ]; then
+            echo "Raspberry Pi OS is supported for the built-in T-Pot Mobile edition only."
+            exit 1
+          fi
+        fi
+      tags:
+        - always
+
     - name: Get distribution name (All)
       raw: awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"' | cut -d " " -f1
       register: my_distribution
@@ -168,38 +211,25 @@
 
     - name: Check if supported distribution (All)
       assert:
-        that: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
-        fail_msg: "This installer does not accept {{ ansible_facts.distribution }}. See the T-Pot README for host requirements and support tiers."
-        success_msg: "T-Pot will now install on {{ ansible_facts.distribution }}."
+        that: ansible_facts.distribution == "Debian"
+        fail_msg: "This installer requires Debian GNU/Linux 13. See the T-Pot README for host requirements."
+        success_msg: "T-Pot will now install on Debian."
 
     - name: Check if supported distribution version (All)
-      # T-Pot follows the current release of each distribution, the packages and
-      # repositories it uses are only available there. openSUSE Tumbleweed rolls
-      # and is not listed, so the check skips it.
+      # The installer only permits Debian 13; keep this facts check aligned with the raw preflight above.
       assert:
         that: my_current_version == my_supported_version[ansible_facts.distribution]
         fail_msg: "The installer requires {{ ansible_facts.distribution }} {{ my_supported_version[ansible_facts.distribution] }}, this system runs {{ my_current_version }}."
         success_msg: "T-Pot will now install on {{ ansible_facts.distribution }} {{ my_current_version }}."
       vars:
         my_supported_version:
-          AlmaLinux: "10"
           Debian: "13"
-          Fedora: "44"
-          RedHat: "10"
-          Rocky: "10"
-          Ubuntu: "26.04"
-        # Ubuntu is identified by major and minor, every other one by major
-        my_current_version: "{{ ansible_facts.distribution_version if ansible_facts.distribution == 'Ubuntu' else ansible_facts.distribution_major_version }}"
+        my_current_version: "{{ ansible_facts.distribution_major_version }}"
       when: ansible_facts.distribution in my_supported_version
 
-    - name: Show preferred host platforms (All)
+    - name: Show supported host platforms (All)
       debug:
-        msg: "Debian is the preferred T-Pot platform. Raspberry Pi OS remains supported for T-Pot Mobile."
-
-    - name: Warn about best-effort distribution (All)
-      debug:
-        msg: "WARNING: {{ ansible_facts.distribution }} is best effort only: no equal test coverage or guaranteed distribution-specific fixes."
-      when: ansible_facts.distribution != "Debian"
+        msg: "New installations require Debian GNU/Linux 13. Raspberry Pi OS is supported for the built-in T-Pot Mobile edition."
 
     - name: Count default routes (All)
       ansible.builtin.shell: ip route show default | wc -l
@@ -1415,6 +1445,7 @@
         path: /usr/local/sbin/tpot-auto-updates
       register: tpot_auto_updates_helper
 
+    # the guard of a migration (tpot migrate) holds tpot.service for hours of export or restore: no reboot then
     - name: Setup a randomized daily reboot (All)
       become: true
       cron:
@@ -1422,7 +1453,7 @@
         user: root
         minute: "{{ random_minute }}"
         hour: "{{ random_hour }}"
-        job: "bash -c 'systemctl stop tpot.service && docker container prune -f; docker image prune -f; docker volume prune -f; {{ auto_updates_step }}/usr/sbin/shutdown -r +1 \"T-Pot Daily Reboot\"'"
+        job: "bash -c 'test -e /etc/systemd/system/tpot.service.d/90-tpot-migration.conf && exit 0; systemctl stop tpot.service && docker container prune -f; docker image prune -f; docker volume prune -f; {{ auto_updates_step }}/usr/sbin/shutdown -r +1 \"T-Pot Daily Reboot\"'"
         state: present
       when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
 

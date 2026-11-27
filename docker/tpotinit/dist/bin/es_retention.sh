@@ -241,8 +241,10 @@ function fuLOGSTASH_TEMPLATE () {
 # written.
 function fuILM_TEMPLATES () {
   local myNAME myCODE myBODY myFILE myRC=0
+  local myTEMPLATES=(tpot-failures)
+  if [[ "${TPOT_TYPE:-HIVE}" != MOBILE ]]; then myTEMPLATES+=(tpot-sensor-status tpot-sensor-heartbeat); fi
   myBODY="$(mktemp)" || { echo "# Warning: no temporary file for the create-only index templates."; return 1; }
-  for myNAME in tpot-sensor-status tpot-sensor-heartbeat tpot-failures; do
+  for myNAME in "${myTEMPLATES[@]}"; do
     myFILE="/opt/tpot/etc/ilm/${myNAME}.json"
     myCODE="$(curl -s --max-time 10 -o "${myBODY}" -w '%{http_code}' "${myILM_ES}/_index_template/${myNAME}")"
     case "${myCODE}" in
@@ -300,7 +302,9 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     sleep 5 & wait $!
   done
   fuILM_MAIN
-  fuILM_MAIN "${TPOT_SENSOR_STATUS_RETENTION:-}" TPOT_SENSOR_STATUS_RETENTION \
-    tpot-sensor-status 'tpot-sensor-heartbeat-*' 'tpot elastic retention --sensor-history'
+  if [[ "${TPOT_TYPE:-HIVE}" != MOBILE ]]; then
+    fuILM_MAIN "${TPOT_SENSOR_STATUS_RETENTION:-}" TPOT_SENSOR_STATUS_RETENTION \
+      tpot-sensor-status 'tpot-sensor-heartbeat-*' 'tpot elastic retention --sensor-history'
+  fi
   fuILM_TEMPLATES_UNTIL_DONE
 fi

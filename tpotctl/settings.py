@@ -59,8 +59,8 @@ class Settings:
 
     def not_here(self, rule: envschema.Rule) -> str:
         """Why a shown key does not apply to this T-Pot, "" if it does."""
-        if rule.scope and rule.scope != self.values.get("TPOT_TYPE", ""):
-            return f"only on a {rule.scope}"
+        if rule.scope and self.values.get("TPOT_TYPE", "") not in rule.scope:
+            return f"only on a {' or '.join(rule.scope)}"
         if self.absent(rule):
             return "not in your edition"
         return ""

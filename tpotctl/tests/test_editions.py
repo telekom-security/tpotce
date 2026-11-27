@@ -227,11 +227,48 @@ class EditionsTest(unittest.TestCase):
                 editions.switch(plan, self.repo, run=calls, linux=True)
         self.assertNotIn(["sudo", "systemctl", "start", "tpot"], calls.commands)
 
-    def test_sensor_to_mobile_is_no_sensor_any_more(self):
-        self.use("sensor")
-        plan = self.plan("mobile", env={"TPOT_TYPE": "SENSOR"}, users_ok=False)
-        self.assertEqual(plan.env_changes, {"TPOT_TYPE": "HIVE"})
-        self.assertFalse(plan.needs_web_user)            # MOBILE has no web UI
+    def test_mobile_switch_matrix(self):
+        for source, role, target, expected, user in (
+                ("sensor", "SENSOR", "mobile", "MOBILE", False),
+                ("standard", "HIVE", "mobile", "MOBILE", False),
+                ("mobile", "MOBILE", "standard", "HIVE", True),
+                ("mobile", "MOBILE", "sensor", "HIVE", False)):
+            with self.subTest(source=source, target=target):
+                self.use(source)
+                plan = self.plan(target, env={"TPOT_TYPE": role}, users_ok=False)
+                self.assertEqual(plan.env_changes, {"TPOT_TYPE": expected})
+                self.assertEqual(plan.needs_web_user, user)
+                if target == "sensor":
+                    self.assertTrue(any("pair" in w or "sensors add" in w for w in plan.warnings))
+
+    def test_missing_mobile_to_hive_user_stops_before_swap(self):
+        self.use("mobile")
+        plan = self.plan("standard", env={"TPOT_TYPE": "MOBILE"}, users_ok=False)
+        calls = Calls()
+        with self.assertRaisesRegex(editions.EditionError, "web user"):
+            editions.switch(plan, self.repo, run=calls, linux=True)
+        self.assertEqual(calls.commands, [])
+        self.assertEqual(editions.current(self.repo)[0], "MOBILE")
+
+    def test_mobile_to_sensor_waits_for_pairing_instead_of_starting_shipper(self):
+        self.use("mobile")
+        calls = Calls()
+        plan = self.plan("sensor", env={"TPOT_TYPE": "MOBILE"})
+        editions.switch(plan, self.repo, run=calls, linux=True)
+        self.assertEqual(editions.current(self.repo)[0], "SENSOR")
+        self.assertNotIn(["sudo", "systemctl", "start", "tpot"], calls.commands)
+
+    def test_failed_mobile_start_keeps_matching_private_env_backup(self):
+        env = os.path.join(self.repo, ".env")
+        old = self.read(env)
+        plan = self.plan("mobile")
+        with self.assertRaises(editions.EditionError) as failure:
+            editions.switch(plan, self.repo, run=Calls(fail=("start",)), linux=True)
+        self.assertIn("TPOT_TYPE=MOBILE\n", self.read(env))
+        backup = plan.keep_copy + ".env"
+        self.assertIn(backup, str(failure.exception))
+        self.assertEqual(self.read(backup), old)
+        self.assertEqual(os.stat(backup).st_mode & 0o777, 0o600)
 
     def test_no_compose_file_is_nothing_to_keep(self):
         os.remove(self.compose())
